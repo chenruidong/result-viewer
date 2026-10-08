@@ -1,0 +1,19 @@
+[project]
+name = "result-viewer"
+version = "0.1.0"
+description = "Flip through per-unit figures of Engaging results and keep a notebook per session"
+requires-python = ">=3.8"
+dependencies = []
+
+[project.scripts]
+result-viewer = "result_viewer.cli:main"
+
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["result_viewer*"]
+
+[tool.setuptools.package-data]
+result_viewer = ["static/*"]

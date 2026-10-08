@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<title>Unit Raster Viewer</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%232f6fde'/%3E%3Cg stroke='white' stroke-width='2.4' stroke-linecap='round'%3E%3Cpath d='M7 9v4M12 8v6M17 9v3M22 8v5M9 19v4M14 18v6M20 19v4M25 18v5'/%3E%3C/g%3E%3C/svg%3E">
+<link rel="stylesheet" href="/static/app.css">
+</head>
+<body>
+<header id="bar">
+  <button id="drawerBtn" class="icon phone-only" title="Unit list" aria-label="Unit list">☰</button>
+  <span class="brand desk-only">Unit rasters</span>
+  <select id="session" aria-label="Session"></select>
+  <span class="rowbreak"></span>
+  <div class="nav">
+    <button id="prev" class="icon" title="Previous unit (←)" aria-label="Previous unit">‹</button>
+    <span id="pos" title="Position in the filtered list">–</span>
+    <button id="next" class="icon" title="Next unit (→)" aria-label="Next unit">›</button>
+  </div>
+  <span class="spacer"></span>
+  <button id="egBtn" class="pill" title="Open this unit in electro_gui (e)" hidden><span class="dot"></span>electro_gui ↗</button>
+  <button id="panelsBtn" class="icon desk-only" title="Hide/show side panels (m)" aria-label="Toggle side panels">◫</button>
+  <button id="helpBtn" class="icon" title="Keys and gestures (?)" aria-label="Help">?</button>
+</header>
+
+<div id="main">
+  <aside id="units" aria-label="Units">
+    <div class="units-head">
+      <input id="jump" type="text" inputmode="numeric" autocomplete="off" placeholder="Go to unit # (g)" aria-label="Go to unit">
+      <button id="drawerClose" class="icon phone-only" aria-label="Close unit list">✕</button>
+    </div>
+    <div id="filters"></div>
+    <div id="count" class="muted small"></div>
+    <ol id="unitList"></ol>
+  </aside>
+
+  <section id="stage">
+    <div id="titleRow">
+      <h1 id="title">Loading…</h1>
+      <span id="badges"></span>
+    </div>
+    <nav id="views" aria-label="Figures"></nav>
+    <div id="figure">
+      <img id="img" alt="" draggable="false">
+      <div id="figMsg" hidden></div>
+      <button class="edge prev" id="edgePrev" aria-label="Previous unit">‹</button>
+      <button class="edge next" id="edgeNext" aria-label="Next unit">›</button>
+      <div id="spinner" hidden></div>
+    </div>
+  </section>
+
+  <aside id="notes" aria-label="Notes">
+    <div id="noteCtl">
+      <div class="note-tools">
+        <button id="flag" class="flag" aria-pressed="false" title="Flag (f)"><span class="star">☆</span> Flag <kbd>f</kbd></button>
+        <span id="saveState" class="muted small" aria-live="polite"></span>
+      </div>
+      <div id="tagBtns"></div>
+    </div>
+    <div id="noteEdit">
+      <textarea id="note" rows="5" placeholder="Note for this unit…  (n to write · Esc when done · ⌘↩ save &amp; next)"></textarea>
+      <div id="conflicts" class="warn small" hidden></div>
+    </div>
+    <div id="nb">
+      <h2 id="nbTitle">Notebook</h2>
+      <ol id="noted"></ol>
+      <details id="filesBox" class="muted small"><summary>Files</summary><div id="files"></div></details>
+    </div>
+  </aside>
+</div>
+
+<div id="help" class="overlay" hidden>
+  <div class="card" role="dialog" aria-label="Keys and gestures">
+    <button class="icon close" id="helpClose" aria-label="Close">✕</button>
+    <h2>Keys</h2>
+    <table>
+      <tr><td><kbd>→</kbd> <kbd>←</kbd> · <kbd>j</kbd> <kbd>k</kbd> · <kbd>Space</kbd></td><td>next / previous unit (filtered list)</td></tr>
+      <tr><td><kbd>Home</kbd> <kbd>End</kbd></td><td>first / last unit</td></tr>
+      <tr><td><kbd>g</kbd></td><td>go to unit #</td></tr>
+      <tr><td><kbd>]</kbd> <kbd>[</kbd> · <kbd>r</kbd></td><td>next / previous figure · back to raster</td></tr>
+      <tr><td><kbd>}</kbd> <kbd>{</kbd></td><td>next / previous session</td></tr>
+      <tr><td><kbd>1</kbd>–<kbd>9</kbd></td><td>toggle tag</td></tr>
+      <tr><td><kbd>f</kbd></td><td>flag</td></tr>
+      <tr><td><kbd>n</kbd> · <kbd>Enter</kbd></td><td>write a note (<kbd>Esc</kbd> done, <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>Enter</kbd> save &amp; next)</td></tr>
+      <tr><td><kbd>z</kbd> · click figure</td><td>zoom / fit (drag to pan)</td></tr>
+      <tr><td><kbd>e</kbd></td><td>open unit in electro_gui</td></tr>
+      <tr><td><kbd>m</kbd></td><td>hide / show side panels</td></tr>
+      <tr><td><kbd>?</kbd></td><td>this help</td></tr>
+    </table>
+    <h2>Touch</h2>
+    <p>Swipe the figure left/right for the next/previous unit · tap it to zoom, tap again to fit · ☰ opens the unit list and filters.</p>
+    <p class="muted small" id="helpPaths"></p>
+  </div>
+</div>
+<div id="toast" role="status" hidden></div>
+<script src="/static/app.js"></script>
+</body>
+</html>
