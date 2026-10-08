@@ -668,6 +668,7 @@
     else { poll(); egLoop(); }
   });
   window.addEventListener('pagehide', () => flushNote(true));
+  window.addEventListener('focus', () => egLoop(true));  // back from the electro_gui tab: is it still up?
 
   // ------------------------------------------------------------ electro_gui
   function egEncode(state) {
@@ -703,18 +704,27 @@
     b.hidden = !S.eg.url;
     b.classList.toggle('up', !!S.eg.running);
     b.classList.toggle('down', !S.eg.running);
-    b.title = S.eg.running ? 'Open this unit in electro_gui (e)' : `electro_gui is not answering at ${S.eg.url}`;
+    b.title = S.eg.running ? 'Open this unit in electro_gui (e)'
+      : S.config.electro_gui.can_start ? 'electro_gui is not running: e starts it and opens this unit'
+      : `electro_gui is not answering at ${S.eg.url}`;
   }
 
-  /** Open (or re-point) the "electro_gui" tab at this unit; its hashchange handler applies the new state in place. */
+  /** Open (or re-point) the "electro_gui" tab at this unit; its hashchange handler applies the new state in place.
+   *  When electro_gui is not answering, the tab first shows eg-start.html, which starts it (on this Mac) and
+   *  then goes to the unit; the tab is opened right here so the browser does not block it as a popup. */
   function openEg() {
     const u = S.byId.get(S.cur);
     if (!u || !S.eg.url) return;
-    window.open(egLink(u), 'electro_gui');
-    if (!S.eg.running) {
-      toast(`electro_gui did not answer at <code>${esc(S.eg.url)}</code> on the last check. If the tab shows an error, start it from analysis_imitation:<br><code>${esc(S.config.electro_gui.launch)}</code>`, 10000, true);
-      egLoop(true);
+    const link = egLink(u);
+    if (S.eg.running) { window.open(link, 'electro_gui'); return; }
+    if (S.config.electro_gui.can_start) {
+      window.open('/static/eg-start.html#' + encodeURIComponent(link), 'electro_gui');
+      setTimeout(() => egLoop(true), 3000);
+      return;
     }
+    window.open(link, 'electro_gui');
+    toast(`electro_gui did not answer at <code>${esc(S.eg.url)}</code>. Start it on the Mac:<br><code>${esc(S.config.electro_gui.launch)}</code>`, 10000, true);
+    egLoop(true);
   }
   $('egBtn').addEventListener('click', openEg);
 

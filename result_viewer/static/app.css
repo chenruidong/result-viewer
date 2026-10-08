@@ -263,3 +263,10 @@ body.focus #units, body.focus #notes { display: none; }
 @media (max-width: 420px) {
   #tagBtns { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* ------------------------------------------------- eg-start.html */
+body.eg-start { align-items: center; justify-content: center; padding: 16px; }
+body.eg-start .card { max-width: 560px; }
+body.eg-start code { word-break: break-all; }
+.wait { display: flex; align-items: center; gap: 10px; margin: 6px 0 10px; }
+.spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite; }

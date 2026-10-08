@@ -18,6 +18,7 @@ import hmac
 import json
 import os
 import re
+import shlex
 import shutil
 import subprocess
 import sys
@@ -100,13 +101,14 @@ class Tailnet:
 
 class App:
     def __init__(self, catalog, notebooks, data_dir, configs_root, tailnet, electro_gui_url=None,
-                 electro_gui_remote_url=None):
+                 electro_gui_remote_url=None, electro_gui_repo=None, electro_gui_python=None):
         self.catalog = catalog
         self.notebooks = notebooks
         self.data_dir = Path(data_dir)
         self.configs_root = Path(configs_root)
         self.tailnet = tailnet
         self.eg_override = {"local": electro_gui_url, "tailnet": electro_gui_remote_url}
+        self._launcher = electro_gui.Launcher(None, self.configs_root, electro_gui_repo, electro_gui_python)
         self.started = time.time()
         self._probe = {}
 
@@ -123,11 +125,22 @@ class App:
     def electro_gui_running(self, url):
         now = time.monotonic()
         hit = self._probe.get(url)
-        if hit and now - hit[0] < 5:
+        if hit and now - hit[0] < 2:
             return hit[1]
         running = electro_gui.probe(url)
         self._probe[url] = (now, running)
         return running
+
+    def launcher(self, settings=None):
+        """The launcher for this Mac's electro_gui URL (settings.json is re-read, so it can change)."""
+        self._launcher.url = self.electro_gui_url("local", settings)
+        return self._launcher
+
+    def start_electro_gui(self):
+        launcher = self.launcher()
+        result = launcher.start()
+        self._probe.pop(launcher.url, None)
+        return result
 
     def snapshot(self, sid, unit_id):
         """What the catalog says about a unit right now; None when the session is not mounted."""
@@ -225,6 +238,10 @@ def make_handler(app):
                     self._check_post(where)
                     if url.path == "/api/note":
                         return self._json(self.post_note(self._body()))
+                    if url.path == "/api/electro_gui/start":
+                        if where != "local":
+                            raise HTTPError(403, "electro_gui can be started only from the Mac running the viewer.")
+                        return self._json(app.start_electro_gui())
                     raise HTTPError(404, "Not found.")
                 path = url.path
                 if path in ("/", "/index.html"):
@@ -307,10 +324,13 @@ def make_handler(app):
         def config(self, query, where):
             settings = app.settings()
             url = app.electro_gui_url(where, settings)
+            launcher = app.launcher(settings)
+            by_hand = (f"cd {shlex.quote(str(launcher.repo))} && "
+                       + " ".join(shlex.quote(a) for a in launcher.command()) if launcher.python and launcher.port()
+                       else f"python -m electro_gui --config-dir output/presentation --config-dir {shlex.quote(str(app.configs_root))}")
             return {"version": __version__, "host": host_tag(), "where": where, "tags": settings["tags"],
-                    "electro_gui": {"url": url,
-                                    "launch": "python -m electro_gui --config-dir output/presentation "
-                                              f"--config-dir '{app.configs_root}'"},
+                    "electro_gui": {"url": url, "launch": by_hand,
+                                    "can_start": where == "local" and bool(url) and launcher.problem() is None},
                     "roots": [str(r) for r in app.catalog.roots],
                     "paths": {"data": str(app.data_dir), "notes": str(app.notebooks.notes_dir),
                               "configs": str(app.configs_root)}}
@@ -348,7 +368,10 @@ def make_handler(app):
 
         def electro_gui_status(self, query, where):
             url = app.electro_gui_url(where)
-            return {"url": url, "running": bool(url) and app.electro_gui_running(url)}
+            out = {"url": url, "running": bool(url) and app.electro_gui_running(url)}
+            if where == "local":
+                out["launch"] = app.launcher().state()
+            return out
 
         def post_note(self, body):
             sid = body.get("sid", "")

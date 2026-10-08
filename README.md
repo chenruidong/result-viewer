@@ -83,6 +83,16 @@ after editing.
   `#s=<base64url JSON>`, so the viewer opens `http://127.0.0.1:8765/#s={"session":…,"unit":…}` in a
   tab named `electro_gui` (reused, and applied without a reload). For a unit labelled other than
   SUA/MUA the link also widens electro_gui's unit picker (`unitQ`) so the unit stays selectable.
+* **Starting it**: when nothing answers at that URL, `e` shows "Starting electro_gui…" in that tab,
+  the viewer starts it as you would by hand —
+  `cd ~/code/analysis_imitation && <imitation-phys python> -m electro_gui --no-browser --port 8765
+  --config-dir output/presentation --config-dir <data>/electro_gui` — and the tab moves on to the
+  unit once electro_gui answers (the first load of a session then verifies its NWB, as usual). The
+  Python is the first `imitation-phys` env under `~/miniconda`, `~/miniforge3`, `~/miniconda3`,
+  `~/mambaforge` or `~/anaconda3`; override with `--electro-gui-python` / `--electro-gui-repo`.
+  It runs in a session of its own, so it keeps running after the viewer restarts; its output goes
+  to `~/Library/Logs/electro_gui.log`. Stop it with `kill $(lsof -t -iTCP:8765 -sTCP:LISTEN)`.
+  Only the Mac running the viewer can start it.
 * **Noted units as config files**: start electro_gui with the viewer's folder as a config directory,
   and Views → Config files lists every noted unit, one section per session, titled
   `Unit 4 · NOISE · ACC · ch 22 ★` with the tags and first line of the note as the hint:

@@ -28,6 +28,10 @@ def _add_serve_args(parser):
                         help="electro_gui for this Mac (overrides settings.json electro_gui.url)")
     parser.add_argument("--electro-gui-remote-url", metavar="URL",
                         help="electro_gui for tailnet devices (overrides settings.json electro_gui.remote_url)")
+    parser.add_argument("--electro-gui-repo", metavar="DIR",
+                        help="analysis_imitation checkout to start electro_gui from (default ~/code/analysis_imitation)")
+    parser.add_argument("--electro-gui-python", metavar="PATH",
+                        help="Python to start electro_gui with (default: the first imitation-phys env found)")
     parser.add_argument("--owner", metavar="LOGIN",
                         help="tailnet login allowed through tailscale serve (default: this node's owner)")
     parser.add_argument("--allow-host", action="append", default=[], metavar="NAME",
@@ -50,7 +54,8 @@ def cmd_serve(args):
     data_dir = _data_dir(args)
     load_settings(data_dir)
     app = App(Catalog(args.root or DEFAULT_ROOTS), Notebooks(data_dir), data_dir, data_dir / "electro_gui",
-              Tailnet(args.owner, args.allow_host), args.electro_gui_url, args.electro_gui_remote_url)
+              Tailnet(args.owner, args.allow_host), args.electro_gui_url, args.electro_gui_remote_url,
+              args.electro_gui_repo, args.electro_gui_python)
     try:
         server = make_server(app, args.host, args.port)
     except ValueError as exc:

@@ -46,7 +46,8 @@ class ServerTest(unittest.TestCase):
         data.mkdir()
         cls.data = data
         app = App(Catalog([base / "results"]), Notebooks(data), data, data / "electro_gui",
-                  FixedTailnet(OWNER, [NODE]), electro_gui_url="http://127.0.0.1:9")
+                  FixedTailnet(OWNER, [NODE]), electro_gui_url="http://127.0.0.1:9",
+                  electro_gui_repo=base / "no-analysis-imitation")  # never start the real electro_gui here
         cls.server = make_server(app, "127.0.0.1", 0)
         cls.port = cls.server.server_address[1]
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()
@@ -153,7 +154,18 @@ class ServerTest(unittest.TestCase):
 
     def test_electro_gui_status_when_down(self):
         status, body = self.get_json("/api/electro_gui")
-        self.assertEqual(body, {"url": "http://127.0.0.1:9", "running": False})
+        self.assertEqual((body["url"], body["running"]), ("http://127.0.0.1:9", False))
+        self.assertFalse(body["launch"]["can_start"])
+        self.assertIn("no electro_gui package", body["launch"]["problem"])
+        self.assertFalse(self.get_json("/api/config")[1]["electro_gui"]["can_start"])
+
+    def test_electro_gui_start_is_local_only(self):
+        resp, data = self.request("POST", "/api/electro_gui/start", {}, host=f"{NODE}:8766",
+                                  headers={"Tailscale-User-Login": OWNER, "Origin": f"https://{NODE}:8766"})
+        self.assertEqual(resp.status, 403)
+        resp, data = self.request("POST", "/api/electro_gui/start", {})
+        self.assertEqual(resp.status, 200)
+        self.assertEqual(json.loads(data)["started"], False)
 
 
 if __name__ == "__main__":
