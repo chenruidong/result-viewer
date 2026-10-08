@@ -36,7 +36,11 @@ STATIC = Path(__file__).with_name("static")
 LOOPBACK = {"127.0.0.1", "localhost", "::1"}
 CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; charset=utf-8",
                  ".css": "text/css; charset=utf-8", ".svg": "image/svg+xml", ".png": "image/png",
-                 ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".json": "application/json"}
+                 ".jpg": "image/jpeg", ".jpeg": "image/jpeg", ".json": "application/json",
+                 ".webmanifest": "application/manifest+json"}
+# Paths browsers and iOS ask for at the root, whatever the page links to.
+ROOT_FILES = {"/apple-touch-icon.png": "apple-touch-icon.png", "/apple-touch-icon-precomposed.png": "apple-touch-icon.png",
+              "/favicon.ico": "favicon-32.png"}
 _STATIC_NAME = re.compile(r"^[A-Za-z0-9_.-]+$")
 MAX_BODY = 256 * 1024
 TAILSCALE_CANDIDATES = ("tailscale", "/usr/local/bin/tailscale", "/opt/homebrew/bin/tailscale",
@@ -246,6 +250,8 @@ def make_handler(app):
                 path = url.path
                 if path in ("/", "/index.html"):
                     return self.static("index.html")
+                if path in ROOT_FILES:
+                    return self.static(ROOT_FILES[path])
                 if path.startswith("/static/"):
                     return self.static(path[len("/static/"):])
                 if path.startswith("/fig/"):

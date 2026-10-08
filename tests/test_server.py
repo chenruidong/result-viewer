@@ -98,6 +98,22 @@ class ServerTest(unittest.TestCase):
         self.assertEqual(self.request("GET", "/static/app.js")[0].status, 200)
         self.assertEqual(self.request("GET", "/static/../server.py")[0].status, 404)
 
+    def test_home_screen_icon_and_manifest(self):
+        _, page = self.request("GET", "/")
+        self.assertIn(b'rel="apple-touch-icon" href="/static/apple-touch-icon.png"', page)
+        self.assertIn(b'rel="manifest" href="/static/manifest.webmanifest"', page)
+        for path in ("/apple-touch-icon.png", "/apple-touch-icon-precomposed.png", "/static/apple-touch-icon.png",
+                     "/favicon.ico", "/static/favicon.svg"):
+            resp, data = self.request("GET", path)
+            self.assertEqual(resp.status, 200, path)
+            self.assertTrue(resp.getheader("Content-Type").startswith("image/"), path)
+        resp, data = self.request("GET", "/static/manifest.webmanifest")
+        self.assertEqual(resp.getheader("Content-Type"), "application/manifest+json")
+        manifest = json.loads(data)
+        self.assertEqual((manifest["short_name"], manifest["display"]), ("Rasters", "standalone"))
+        for icon in manifest["icons"]:
+            self.assertEqual(self.request("GET", icon["src"])[0].status, 200, icon["src"])
+
     def test_sessions_and_session(self):
         status, body = self.get_json("/api/sessions")
         self.assertEqual(body["sessions"][0]["id"], SID)

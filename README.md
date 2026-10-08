@@ -129,6 +129,13 @@ Requests through it carry `Tailscale-User-Login`; the server answers only this n
 `tailscale status --json`, or `--owner`), only for this node's MagicDNS name or a loopback `Host`, and
 refuses cross-site POSTs. A plain local browser (loopback `Host`, no Tailscale header) is always served.
 
+**Home screen.** In Safari on the iPhone open the URL, then Share → Add to Home Screen: it is called
+"Rasters", has its own icon (a raster card with a gold star on a blue tile), and opens full screen
+without Safari's bars (`apple-mobile-web-app-capable`, `manifest.webmanifest` with
+`display: standalone`). The icons are drawn by `scripts/make_icons.py` (needs `rsvg-convert`,
+`brew install librsvg`): `icon.svg` and its PNG sizes for iOS (180 px) and Android/Chrome (192, 512,
+maskable 512), plus a simpler `favicon.svg` for browser tabs.
+
 Keep the server running with the LaunchAgent (`RunAtLoad` + `KeepAlive`, log in
 `~/Library/Logs/result-viewer.log`):
 
@@ -153,6 +160,7 @@ result_viewer/
   server.py       HTTP API + figure files, local/tailnet access rules
   launchagent.py  com.ruidong.result-viewer
   cli.py          serve | rebuild | launchagent
-  static/         index.html, app.css, app.js (no build step)
+  static/         index.html, app.css, app.js, eg-start.html/.js, icons, manifest (no build step)
+scripts/make_icons.py   draws icon.svg / favicon.svg and renders the PNGs
 tests/            unittest, fake results tree in tests/helpers.py
 ```
