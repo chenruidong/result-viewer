@@ -55,26 +55,31 @@ class Tailnet:
         self._extra = {n.lower().rstrip(".") for n in names if n}
         self._owner = owner
         self._dns = None
-        self._checked = 0.0
+        self._checked = None  # time.monotonic() may start near 0 at process start, so no 0.0 sentinel
         self._lock = threading.Lock()
 
     def _read(self):
         exe = next(filter(None, (shutil.which(c) for c in TAILSCALE_CANDIDATES)), None)
         if not exe:
+            print("tailnet: no tailscale CLI found; tailnet requests are refused", file=sys.stderr, flush=True)
             return None
         try:
-            out = subprocess.run([exe, "status", "--json"], capture_output=True, text=True, timeout=5).stdout
-            data = json.loads(out)
+            done = subprocess.run([exe, "status", "--json"], capture_output=True, text=True, timeout=5,
+                                  stdin=subprocess.DEVNULL)
+            data = json.loads(done.stdout)
             me = data["Self"]
             return me.get("DNSName", "").rstrip(".").lower() or None, data["User"][str(me["UserID"])]["LoginName"]
-        except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError):
+        except (OSError, ValueError, KeyError, TypeError, subprocess.SubprocessError) as exc:
+            detail = locals().get("done")
+            extra = f" (exit {detail.returncode}: {detail.stderr.strip()[:200] or detail.stdout.strip()[:200]})" if detail else ""
+            print(f"tailnet: `{exe} status --json` failed: {exc!r}{extra}", file=sys.stderr, flush=True)
             return None
 
     def refresh(self, force=False):
         with self._lock:
             if self._dns and self._owner and not force:
                 return
-            if not force and time.monotonic() - self._checked < 30:
+            if not force and self._checked is not None and time.monotonic() - self._checked < 30:
                 return
             self._checked = time.monotonic()
             found = self._read()

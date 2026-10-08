@@ -19,6 +19,23 @@ class FixedTailnet(Tailnet):
         return None
 
 
+class TailnetTest(unittest.TestCase):
+    def test_first_lookup_runs_at_once_and_failures_retry_later(self):
+        calls = []
+
+        class Stub(Tailnet):
+            def _read(self):
+                calls.append(1)
+                return None if len(calls) == 1 else ("node.tail0000.ts.net", OWNER)
+
+        t = Stub()
+        self.assertEqual((t.names, t.owner), (set(), None))  # first call looked, found nothing
+        self.assertEqual(len(calls), 1)  # and does not look again within 30 s
+        t.refresh(force=True)
+        self.assertEqual((t.names, t.owner), ({"node.tail0000.ts.net"}, OWNER))
+        self.assertEqual(len(calls), 2)  # found: no further lookups
+
+
 class ServerTest(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
