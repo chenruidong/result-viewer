@@ -230,10 +230,15 @@ body.focus #units, body.focus #notes { display: none; }
 @media (max-width: 999px) {
   .phone-only { display: inline-flex !important; }
   .desk-only { display: none !important; }
-  body { font-size: 15px; }
-  #main { display: block; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+  /* The page scrolls under a sticky bar. A scrolling #main would hold the fixed unit drawer, and
+     iOS stacks it under the backdrop there and clips its top behind the bar. */
+  body { display: block; height: auto; font-size: 15px; }
+  #main { display: block; }
   /* two rows: [☰ session ?] then [‹ n/N › … electro_gui] */
-  #bar { flex-wrap: wrap; gap: 4px 6px; padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); }
+  #bar {
+    position: sticky; top: 0; z-index: 20; flex-wrap: wrap; gap: 4px 6px;
+    padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right));
+  }
   #drawerBtn { order: 0; }
   #session { order: 1; flex: 1 1 0; min-width: 0; max-width: none; font-size: 16px; }
   #helpBtn { order: 2; }
