@@ -33,8 +33,29 @@ class CatalogTest(unittest.TestCase):
         self.assertEqual(u["figures"]["selectivity_classes"]["label_in_figure"], "mua")
         self.assertEqual(u["figures"]["sorter_summary"]["label_in_figure"], "mua")
 
-    def test_duplicate_without_summary_takes_the_newest(self):
-        self.assertEqual(self.units[3]["quality"], "sua")
+    def test_stability_table_names_the_current_label(self):
+        u = self.units[3]  # rasters labelled mua and (newer) sua; the stability table says mua
+        self.assertEqual(u["quality"], "mua")
+        self.assertEqual(u["figures"]["raster"]["name"], "unit_0003_mua_Test_20260102_acc_rates_raster.png")
+        self.assertEqual(u["relabelled_from"], ["sua"])
+
+    def test_stability_fields(self):
+        one, two, three, four = (self.units[i] for i in (1, 2, 3, 4))
+        self.assertEqual((one["rate_hz"], one["n_stable"], one["n_trials"], one["full_stable"]), (5.512, 300, 300, True))
+        self.assertEqual((two["n_stable"], two["full_stable"]), (150, False))
+        self.assertEqual((three["n_stable"], three["full_stable"]), (0, False))
+        self.assertTrue(one["in_units"])
+        self.assertFalse(four["in_units"])  # a raster of a unit the current build does not have
+        self.assertIsNone(four["rate_hz"])
+
+    def test_without_a_stability_table(self):
+        (self.root / SID / "analysis" / "tables" / "stability_per_unit.csv").unlink()
+        units = {u["id"]: u for u in Catalog([self.root]).session(SID)["units"]}
+        self.assertEqual(units[3]["quality"], "sua")  # no table, no summary: the newest raster
+        self.assertEqual(units[2]["quality"], "noise")  # the rates summary
+        self.assertIsNone(units[1]["in_units"])
+        self.assertIsNone(units[1]["n_stable"])
+        self.assertFalse(units[1]["full_stable"])
 
     def test_raster_without_quality_token(self):
         self.assertIsNone(self.units[4]["quality"])

@@ -27,10 +27,17 @@ or `RESULT_VIEWER_DATA`.
 
 **Units.** A unit is an NWB unit id, defined by its rate raster
 `analysis/figures/unit_rasters/unit_NNNN_<quality>_<Subject>_<yyyymmdd>_<area>_rates_raster.png`
-(names from `imitation_phys.naming.unit_stem`). When a unit was relabelled, the old figures stay next
-to the new ones; the current label is `tables/unit_NNNN_rates_summary.json` → `unit.quality` (the
-newest file when that is missing). The page says "relabelled · was MUA", and marks any other figure
-that still carries the old label. Other per-unit figures — every `analysis/figures/<kind>/unit_NNNN_*`,
+(names from `imitation_phys.naming.unit_stem`). Figures are not redrawn when units are relabelled, so
+a file name can carry an old label, and a relabelled unit can have rasters under several labels. The
+current label, the firing rate (session mean) and the stable trials come from
+`tables/stability_per_unit.csv`, which has one row per unit of the session NWB and is written by the
+same run that assembles it: in 09_15 it agrees with the NWB on all 875 units, while 155 raster file
+names still say MUA for units now labelled noise. Without that table the label is
+`tables/unit_NNNN_rates_summary.json` → `unit.quality`, then the newest raster's. The page says
+"relabelled · was MUA", marks a figure that still carries the old label, and strikes through a unit
+the current table does not have at all (11 rasters in 09_15 are from an older build). A unit is
+**full-session stable** when it is stable on every completed trial
+(`n_stable_trials == n_completed_trials`). Other per-unit figures — every `analysis/figures/<kind>/unit_NNNN_*`,
 `analysis/figures/<kind>_unit_NNNN_*` and the sorter's `unit_summaries/unit_NNNN_<q>.jpg` — appear as
 extra figure tabs. Peak channel and depth come from the first `tables/*_units.csv` that has them
 and was written after the session NWB; an older table can describe an earlier build of the units
@@ -59,6 +66,7 @@ has synced. If Dropbox still makes a "conflicted copy", the page says so; merge 
 |---|---|
 | `→` `←` · `j` `k` · `Space` | next / previous unit in the filtered list |
 | `Home` `End` · `g` | first / last unit · go to unit # |
+| `s` · `S` | sort by unit # → firing rate → stable trials · reverse the sort |
 | `]` `[` · `r` | next / previous figure · back to the raster |
 | `}` `{` | next / previous session |
 | `1`–`9` · `f` | toggle tag · flag |
@@ -68,8 +76,11 @@ has synced. If Dropbox still makes a "conflicted copy", the page says so; merge 
 | `m` · `?` | hide the side panels · help |
 
 The left column lists the units with their tags (dots), note (✎) and flag (★); the chips above it
-filter by quality, area, flag, noted and tag, and the arrows then step through the matches only.
-Notes save as you type. The notebook column lists every noted unit of the session.
+filter by quality, full-session stability, area, flag, noted and tag, and the arrows then step
+through the matches only. **Sort** (above the list) orders them by unit # (the default), firing rate
+or stable trials, highest first; click the active sort again (or `S`) to reverse it, and the value
+shows in each row. Units without a value sort last. The header shows the unit's rate and stable
+trials. Notes save as you type. The notebook column lists every noted unit of the session.
 
 On a phone the unit list and filters are behind ☰; swipe the figure for the next/previous unit, tap
 it to zoom. Landscape shows the raster largest.

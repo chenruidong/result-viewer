@@ -37,6 +37,14 @@ def make_session(root, sid=SID, tag=TAG):
     tables = s / "analysis" / "tables"
     tables.mkdir(parents=True, exist_ok=True)
     (tables / "unit_0002_rates_summary.json").write_text(json.dumps({"unit": {"unit_id": 2, "quality": "noise"}}))
+    # the current units: 3 is MUA now (its newest raster says SUA), 4 is not in this build, 5 has no raster
+    (tables / "stability_per_unit.csv").write_text(
+        "unit_id,quality,stable,n_spikes,n_completed_trials,n_stable_trials,stable_fraction,mean_rate_hz,"
+        "stable_mean_rate_hz,stable_cv,stable_intervals,reason\n"
+        '1,sua,True,9000,300,300,1.0,5.5123,5.5,0.2,"[[0, 300]]",1 stable block(s) covering 300 trials\n'
+        '2,noise,True,4000,300,150,0.5,1.2,1.4,0.3,"[[150, 300]]",1 stable block(s) covering 150 trials\n'
+        '3,mua,False,800,300,0,0.0,0.4,,,[],no block of 150+ trials survived\n'
+        '5,mua,True,100,300,300,1.0,0.1,0.1,0.1,"[[0, 300]]",1 stable block(s) covering 300 trials\n')
     (tables / "action_value_variance_units.csv").write_text(
         "unit_id,quality,area,peak_channel,depth_um\n1,sua,ACC,22.0,220.0\n2,mua,PMD,140,1400.5\n")
     figs = s / "analysis" / "figures"

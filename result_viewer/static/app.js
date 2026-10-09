@@ -11,6 +11,19 @@
   const Q_ORDER = ['sua', 'mua', 'noise'];
   const EG_DEFAULT_Q = ['sua', 'mua'];
 
+  function noFilters() { return {q: [], area: [], tags: [], flagged: false, noted: false, fullStable: false}; }
+
+  /* Sort keys: `desc` is the natural direction (highest rate first); S.sort.dir = -1 reverses it.
+   * Units without a value (no stability table, or not in the current units) always sort last. */
+  const fmtRate = v => (v == null ? '–' : v >= 10 ? v.toFixed(0) : v.toFixed(1));
+  const SORTS = {
+    id: {label: 'Unit #', value: u => u.id, desc: false, cell: () => ''},
+    rate: {label: 'Rate', value: u => u.rate_hz, desc: true,
+           cell: u => (u.rate_hz == null ? '' : `${fmtRate(u.rate_hz)}<small> Hz</small>`), tip: 'session mean firing rate'},
+    stable: {label: 'Stable trials', value: u => u.n_stable, desc: true,
+             cell: u => (u.n_stable == null ? '' : `${u.n_stable}<small>/${u.n_trials}</small>`), tip: 'trials in the stable block'},
+  };
+
   const store = {
     get(key, fallback) {
       try { const v = localStorage.getItem('rv.' + key); return v == null ? fallback : JSON.parse(v); } catch (e) { return fallback; }
@@ -22,7 +35,8 @@
     config: null, sessions: [], sid: null, session: null, units: [], byId: new Map(),
     notebook: {units: {}}, mtime: null, conflicts: [], files: {},
     filtered: [], cur: null, view: store.get('view', 'raster'), zoom: false,
-    filters: Object.assign({q: [], area: [], tags: [], flagged: false, noted: false}, store.get('filters', {})),
+    filters: Object.assign(noFilters(), store.get('filters', {})),
+    sort: Object.assign({key: 'id', dir: 1}, store.get('sort', {})), sorted: [],
     eg: {url: '', running: false},
   };
 
@@ -33,7 +47,6 @@
   const tagColor = t => { const i = S.config.tags.indexOf(t); return i < 0 ? '#8a8a90' : TAG_COLORS[i % TAG_COLORS.length]; };
   const upper = s => (s ? String(s).toUpperCase() : '');
   const viewLabel = kind => { const v = S.session && S.session.views.find(x => x.kind === kind); return v ? v.label : kind; };
-  const findLastIndex = (xs, f) => { for (let k = xs.length - 1; k >= 0; k--) if (f(xs[k])) return k; return -1; };
   const qRank = q => { const i = Q_ORDER.indexOf(q); return i < 0 ? Q_ORDER.length : i; };
   const prettySid = sid => { const m = /^sub-([^_]+)_ses-(\d{4})_(\d\d)_(\d\d)/.exec(sid); return m ? `${m[1]} ${m[2]}-${m[3]}-${m[4]}` : sid; };
 
@@ -139,6 +152,7 @@
     if (target == null || !S.byId.has(target)) target = S.filtered.length ? S.filtered[0] : (S.units.length ? S.units[0].id : null);
     S.cur = null;
     renderFilters();
+    renderSort();
     renderList();
     renderNoted();
     renderConflicts();
@@ -155,19 +169,48 @@
     if (f.flagged && !(e && e.flag)) return false;
     if (f.noted && !e) return false;
     if (f.tags.length && !(e && (e.tags || []).some(t => f.tags.includes(t)))) return false;
+    if (f.fullStable && !u.full_stable) return false;
     return true;
   }
 
-  function computeFiltered() { S.filtered = S.units.filter(matches).map(u => u.id); }
-  const anyFilter = () => { const f = S.filters; return f.q.length || f.area.length || f.tags.length || f.flagged || f.noted; };
+  function sortUnits() {
+    const s = SORTS[S.sort.key] || SORTS.id;
+    const sign = (s.desc ? -1 : 1) * (S.sort.dir < 0 ? -1 : 1);
+    S.sorted = S.units.slice().sort((a, b) => {
+      const va = s.value(a), vb = s.value(b);
+      if (va == null || vb == null) return va == null && vb == null ? a.id - b.id : va == null ? 1 : -1;
+      return (va - vb) * sign || a.id - b.id;
+    }).map(u => u.id);
+  }
+
+  /** The units to step through: every unit in sort order, then the filters. */
+  function computeFiltered() {
+    sortUnits();
+    S.filtered = S.sorted.filter(id => matches(S.byId.get(id)));
+  }
+  const anyFilter = () => { const f = S.filters; return f.q.length || f.area.length || f.tags.length || f.flagged || f.noted || f.fullStable; };
+  const hasStability = () => S.units.some(u => u.n_trials != null);
+
+  /** The first unit matching the filters after (d > 0) or before (d < 0) the current one, in sort order. */
+  function nearestFiltered(d) {
+    const keep = new Set(S.filtered);
+    let i = S.sorted.indexOf(S.cur);
+    if (i < 0) return S.filtered.length ? S.filtered[d > 0 ? 0 : S.filtered.length - 1] : null;
+    for (i += d; i >= 0 && i < S.sorted.length; i += d) if (keep.has(S.sorted[i])) return S.sorted[i];
+    return null;
+  }
 
   function renderFilters() {
     const uniq = xs => Array.from(new Set(xs.filter(Boolean)));
     const qs = uniq(S.units.map(u => u.quality)).sort((a, b) => qRank(a) - qRank(b) || a.localeCompare(b));
     const areas = uniq(S.units.map(u => u.area)).sort();
     const chip = (group, value, label) => `<button class="chip" data-f="${group}" data-v="${esc(value)}" aria-pressed="${S.filters[group].includes(value)}">${label}</button>`;
-    const bool = (key, label) => `<button class="chip" data-b="${key}" aria-pressed="${!!S.filters[key]}">${label}</button>`;
+    const bool = (key, label, tip) => `<button class="chip" data-b="${key}" aria-pressed="${!!S.filters[key]}"${tip ? ` title="${esc(tip)}"` : ''}>${label}</button>`;
     let html = qs.map(q => chip('q', q, esc(upper(q)))).join('');
+    if (hasStability()) {
+      const n = (S.units.find(u => u.n_trials != null) || {}).n_trials;
+      html += bool('fullStable', 'full-session stable', `Only units stable on all ${n} completed trials (stability_per_unit.csv)`);
+    }
     if (areas.length > 1) html += '<span class="sep"></span>' + areas.map(a => chip('area', a, esc(upper(a)))).join('');
     html += '<span class="sep"></span>' + bool('flagged', '★ flagged') + bool('noted', '✎ noted');
     html += '<span class="sep"></span>' + S.config.tags.map(t => chip('tags', t, `<span class="tdot" style="--c:${tagColor(t)}"></span>${esc(t)}`)).join('');
@@ -181,7 +224,7 @@
     renderFilters();
     renderList();
     if (S.filtered.length && !S.filtered.includes(S.cur)) {
-      const next = S.filtered.find(id => id >= S.cur);
+      const next = nearestFiltered(1);
       go(next != null ? next : S.filtered[S.filtered.length - 1]);
     } else {
       renderPos();
@@ -189,11 +232,46 @@
     }
   }
 
+  function renderSort() {
+    const enabled = hasStability();
+    $('sortBar').innerHTML = '<span class="lbl">Sort</span><span class="seg">' + Object.entries(SORTS).map(([key, s]) => {
+      const on = S.sort.key === key;
+      const descending = s.desc !== (S.sort.dir < 0);
+      const tip = key === 'id' ? 'Unit id (s cycles the sort, S reverses it)' : `${s.tip}${enabled ? '' : ' (no stability table in this session)'}`;
+      return `<button type="button" data-sort="${key}" aria-pressed="${on}"${key !== 'id' && !enabled ? ' disabled' : ''} title="${esc(tip)}">` +
+        `${esc(s.label)}${on ? `<span class="dir">${descending ? '▼' : '▲'}</span>` : ''}</button>`;
+    }).join('') + '</span>';
+  }
+
+  function setSort(key, dir) {
+    if (!SORTS[key] || (key !== 'id' && !hasStability())) return;
+    S.sort = {key, dir: dir === -1 ? -1 : 1};
+    store.set('sort', S.sort);
+    computeFiltered();
+    renderSort();
+    renderList();
+    renderPos();
+    preload();
+    if (document.body.classList.contains('focus')) toast(`Sorted by ${SORTS[key].label.toLowerCase()}${S.sort.dir < 0 ? ', reversed' : ''}`, 1200);
+  }
+
+  function cycleSort() {
+    const keys = Object.keys(SORTS).filter(k => k === 'id' || hasStability());
+    setSort(keys[(keys.indexOf(S.sort.key) + 1) % keys.length], 1);
+  }
+
+  $('sortBar').addEventListener('click', e => {
+    const b = e.target.closest('button[data-sort]');
+    if (!b || b.disabled) return;
+    const key = b.dataset.sort;
+    setSort(key, key === S.sort.key ? -S.sort.dir : 1);  // clicking the active sort reverses it
+  });
+
   $('filters').addEventListener('click', e => {
     const b = e.target.closest('button');
     if (!b) return;
     if (b.dataset.clear) {
-      S.filters = {q: [], area: [], tags: [], flagged: false, noted: false};
+      S.filters = noFilters();
     } else if (b.dataset.b) {
       S.filters[b.dataset.b] = !S.filters[b.dataset.b];
     } else if (b.dataset.f) {
@@ -213,11 +291,14 @@
   }
 
   function renderList() {
+    const cell = (SORTS[S.sort.key] || SORTS.id).cell;
     const rows = S.filtered.map(id => {
       const u = S.byId.get(id);
-      return `<li data-id="${id}"${id === S.cur ? ' class="cur"' : ''}><span class="uid">${id}</span>` +
+      const cls = [id === S.cur ? 'cur' : '', u.in_units === false ? 'gone' : ''].filter(Boolean).join(' ');
+      const tip = u.in_units === false ? ' title="Not in the current units table (a figure from an older build)"' : '';
+      return `<li data-id="${id}"${cls ? ` class="${cls}"` : ''}${tip}><span class="uid">${id}</span>` +
         `<span class="q ${esc(u.quality)}">${esc(upper(u.quality))}</span><span class="ar">${esc(upper(u.area))}</span>` +
-        `<span class="marks">${marks(entry(id))}</span></li>`;
+        `<span class="sv">${cell(u)}</span><span class="marks">${marks(entry(id))}</span></li>`;
     });
     $('unitList').innerHTML = rows.join('') || '<li class="muted" style="display:block">No unit matches these filters.</li>';
     const total = S.units.length, n = S.filtered.length;
@@ -310,9 +391,9 @@
     if (!ids.length) { toast('No unit matches the filters'); return; }
     const i = ids.indexOf(S.cur);
     if (i < 0) {  // the current unit is outside the filters: go to the nearest one that matches
-      const j = d > 0 ? ids.findIndex(x => x > S.cur) : findLastIndex(ids, x => x < S.cur);
-      if (j < 0) { toast(d > 0 ? 'No matching unit after this one' : 'No matching unit before this one'); return; }
-      go(ids[j]);
+      const j = nearestFiltered(d);
+      if (j == null) { toast(d > 0 ? 'No matching unit after this one' : 'No matching unit before this one'); return; }
+      go(j);
       return;
     }
     const j = i + d;
@@ -349,6 +430,11 @@
     const u = S.byId.get(S.cur);
     const fig = u.figures[S.view];
     let html = '';
+    if (u.in_units === false) html += '<span class="badge warn" title="The session\'s current units table (stability_per_unit.csv, same build as the NWB) has no such unit">not in the current units</span>';
+    if (u.n_trials != null) {
+      html += `<span class="badge${u.full_stable ? ' ok' : ''}" title="stability_per_unit.csv: session mean rate; trials in the stable block of ${u.n_trials} completed">` +
+        `${fmtRate(u.rate_hz)} Hz · ${u.full_stable ? `stable on all ${u.n_trials} trials` : `stable ${u.n_stable}/${u.n_trials} trials`}</span>`;
+    }
     if (u.relabelled_from && u.relabelled_from.length) html += `<span class="badge" title="Older rasters with other labels exist">relabelled · was ${esc(u.relabelled_from.map(upper).join(', '))}</span>`;
     if (fig && fig.label_in_figure) html += `<span class="badge warn" title="${esc(fig.name)}">this figure predates the relabel (labelled ${esc(upper(fig.label_in_figure))})</span>`;
     $('badges').innerHTML = html;
@@ -815,6 +901,8 @@
       case 'z': toggleZoom(); break;
       case 'e': openEg(); break;
       case 'm': togglePanels(); break;
+      case 's': cycleSort(); break;
+      case 'S': setSort(S.sort.key, -S.sort.dir); break;
       case '?': showHelp(); break;
       case 'Escape':
         if (S.zoom) toggleZoom(false);

@@ -8,12 +8,15 @@ A results root holds one directory per session, laid out by analysis_imitation:
     <root>/<sid>/preprocessing/figures/unit_summaries/unit_NNNN_<q>.jpg
     <root>/<sid>/analysis/tables/unit_NNNN_rates_summary.json
 
+    <root>/<sid>/analysis/tables/stability_per_unit.csv
+
 ``<tag>`` is ``imitation_phys.naming.session_tag`` (``Ravel_20260915`` for
 ``sub-Ravel_ses-2026_09_15``).  A unit is one NWB unit id; its rate raster
-defines it.  When a unit was relabelled (``mua`` -> ``noise``) the old figures
-stay next to the new ones, so a unit can have several rasters that differ only
-in the quality token: its rates summary JSON names the current label, and the
-newest file wins when that JSON is missing.
+defines it.  Figures are not redrawn when units are relabelled (``mua`` ->
+``noise``), so a file name can carry an old label and a unit can have several
+rasters that differ only in the quality token.  The current label is the
+stability table's (written by the same run that assembles the session NWB);
+without it, the rates summary JSON's, then the newest file's.
 """
 from __future__ import annotations
 
@@ -31,6 +34,7 @@ FIGURES_DIR = ("analysis", "figures")
 SUMMARIES_DIR = ("preprocessing", "figures", "unit_summaries")
 TABLES_DIR = ("analysis", "tables")
 NWB_DIR = ("analysis", "nwb")
+STABILITY_TABLE = "stability_per_unit.csv"
 RASTER_SUFFIX = "_rates_raster.png"
 IMAGE_EXTS = (".png", ".jpg", ".jpeg")
 # Figure folders that hold no per-unit figures, or none of the raster's kind.
@@ -97,7 +101,8 @@ def _mtime(entry):
 
 def _signature(session_dir):
     """Directory mtimes that change whenever a figure is added or removed."""
-    dirs = [session_dir.joinpath(*RASTER_DIR), session_dir.joinpath(*FIGURES_DIR), session_dir.joinpath(*SUMMARIES_DIR)]
+    dirs = [session_dir.joinpath(*RASTER_DIR), session_dir.joinpath(*FIGURES_DIR), session_dir.joinpath(*SUMMARIES_DIR),
+            session_dir.joinpath(*TABLES_DIR, STABILITY_TABLE)]
     try:
         with os.scandir(session_dir.joinpath(*FIGURES_DIR)) as it:
             dirs += [Path(e.path) for e in it if e.is_dir() and not e.name.startswith(".")]
@@ -122,6 +127,36 @@ def _current_quality(session_dir, unit_id):
     if quality is None:
         return None
     return str(quality).strip().lower() or None
+
+
+def _stability(session_dir):
+    """``{unit_id: {quality, rate_hz, n_stable, n_trials, full_stable}}``, or None without a table.
+
+    ``tables/stability_per_unit.csv`` has one row per unit of the session NWB and
+    is written minutes before that NWB is assembled, so its labels are current:
+    in 09_15 they agree with the NWB on all 875 units, while 155 raster file
+    names still carry the label from before the 09-30 relabel.  A unit missing
+    from it is not in the current NWB.  ``full_stable``: stable on every
+    completed trial (``n_stable_trials == n_completed_trials``).
+    """
+    path = session_dir.joinpath(*TABLES_DIR, STABILITY_TABLE)
+    try:
+        handle = path.open("r", encoding="utf-8", newline="")
+    except OSError:
+        return None
+    out = {}
+    with handle:
+        for row in csv.DictReader(handle):
+            try:
+                uid = int(float(row["unit_id"]))
+            except (KeyError, TypeError, ValueError):
+                continue
+            rate, n_stable, n_trials = (_number(row.get(k)) for k in ("mean_rate_hz", "n_stable_trials", "n_completed_trials"))
+            out[uid] = {"quality": (row.get("quality") or "").strip().lower() or None,
+                        "rate_hz": round(rate, 3) if isinstance(rate, float) else rate,
+                        "n_stable": n_stable, "n_trials": n_trials,
+                        "full_stable": bool(n_trials) and n_stable == n_trials}
+    return out
 
 
 def _channels(session_dir, sid):
@@ -187,15 +222,26 @@ def scan_session(root_index, root, sid):
         if m:
             rasters.setdefault(int(m["id"]), []).append((m["q"], m["area"], entry))
 
+    stability = _stability(session_dir)
     units = {}
     for uid, found in rasters.items():
-        # Only a relabelled unit has more than one raster; its rates summary names the current label.
-        current = _current_quality(session_dir, uid) if len(found) > 1 else None
-        q, entry = _pick([(fq, e) for fq, _a, e in found], current)
+        row = stability.get(uid) if stability else None
+        if row and row["quality"]:
+            current = row["quality"]
+        elif len(found) > 1:  # relabelled, no stability table: the rates summary names the label
+            current = _current_quality(session_dir, uid)
+        else:
+            current = None
+        file_q, entry = _pick([(fq, e) for fq, _a, e in found], current)
+        q = current or file_q
         area = next(a for _q, a, e in found if e is entry)
         units[uid] = {"id": uid, "quality": q, "area": area, "peak_channel": None, "depth_um": None,
+                      "rate_hz": row["rate_hz"] if row else None, "n_stable": row["n_stable"] if row else None,
+                      "n_trials": row["n_trials"] if row else None, "full_stable": bool(row and row["full_stable"]),
+                      # False: the session's current units table has no such unit (a figure from an older build)
+                      "in_units": None if stability is None else row is not None,
                       "relabelled_from": sorted({qq for qq, _a, _e in found if qq and qq != q}),
-                      "figures": {RASTER_KIND: _figure(root_index, root, entry, q, q)}}
+                      "figures": {RASTER_KIND: _figure(root_index, root, entry, file_q, q)}}
 
     def attach(kind, uid, cands):
         unit = units.get(uid)
