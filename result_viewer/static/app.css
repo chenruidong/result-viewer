@@ -148,7 +148,7 @@ body.focus #units, body.focus #notes { display: none; }
 }
 #figure.zoom { display: block; overflow: auto; touch-action: auto; cursor: grab; }
 #figure.zoom #img { max-width: none; max-height: none; cursor: zoom-out; }
-#figure.dragging { cursor: grabbing; }
+#figure.dragging, #figure.dragging #img { cursor: grabbing; }
 #figure.loading #img { opacity: .55; transition: opacity .15s .1s; }
 #figMsg { color: var(--muted); text-align: center; max-width: 520px; padding: 40px 16px; }
 .edge {
