@@ -116,9 +116,13 @@ after editing.
 
   The files carry `"generator": "result-viewer"`; the viewer never touches config files without it.
 
-The button's dot is green when electro_gui answers. `settings.json` → `electro_gui.url` (default
-`http://127.0.0.1:8765`) is used on the Mac running the viewer, `electro_gui.remote_url` on other
-devices (empty = no button there). For the phone, run electro_gui behind Tailscale with a fixed token
+The button's dot is green when electro_gui answers. On the Mac running the viewer it opens the
+electro_gui that is running there, on whatever port: the viewer asks the apps dashboard
+(`http://127.0.0.1:8790/api/apps`, at most every 10 s) for an app that is up whose process runs
+`-m electro_gui`. Only when the dashboard does not answer or sees none does it use `settings.json` →
+`electro_gui.url` (default `http://127.0.0.1:8765`), which is also the port it starts one on.
+`--apps-dashboard-url ''` turns the lookup off; `--electro-gui-url` overrides both.
+`electro_gui.remote_url` is used on other devices (empty = no button there). For the phone, run electro_gui behind Tailscale with a fixed token
 and set `remote_url` to match:
 
 ```bash

@@ -25,7 +25,10 @@ def _add_serve_args(parser):
     parser.add_argument("--host", default="127.0.0.1", help="loopback address to bind (default 127.0.0.1)")
     parser.add_argument("--no-browser", action="store_true", help="do not open a browser tab")
     parser.add_argument("--electro-gui-url", metavar="URL",
-                        help="electro_gui for this Mac (overrides settings.json electro_gui.url)")
+                        help="electro_gui for this Mac (overrides the apps dashboard and settings.json electro_gui.url)")
+    parser.add_argument("--apps-dashboard-url", metavar="URL", default=electro_gui.DASHBOARD_URL,
+                        help="apps dashboard asked which electro_gui runs on this Mac, on any port "
+                             f"(default {electro_gui.DASHBOARD_URL}; '' to use settings.json electro_gui.url only)")
     parser.add_argument("--electro-gui-remote-url", metavar="URL",
                         help="electro_gui for tailnet devices (overrides settings.json electro_gui.remote_url)")
     parser.add_argument("--electro-gui-repo", metavar="DIR",
@@ -55,7 +58,7 @@ def cmd_serve(args):
     load_settings(data_dir)
     app = App(Catalog(args.root or DEFAULT_ROOTS), Notebooks(data_dir), data_dir, data_dir / "electro_gui",
               Tailnet(args.owner, args.allow_host), args.electro_gui_url, args.electro_gui_remote_url,
-              args.electro_gui_repo, args.electro_gui_python)
+              args.electro_gui_repo, args.electro_gui_python, args.apps_dashboard_url)
     try:
         server = make_server(app, args.host, args.port)
     except ValueError as exc:

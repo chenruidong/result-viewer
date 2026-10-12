@@ -6,7 +6,8 @@
      "electro_gui": {"url": "http://127.0.0.1:8765", "remote_url": ""}}
 
 ``tags`` are toggled by the number keys in this order (at most nine).
-``electro_gui.url`` is opened from the Mac running the viewer; ``remote_url``
+``electro_gui.url`` is opened from the Mac running the viewer when the apps
+dashboard sees no electro_gui up there on another port; ``remote_url``
 from any other device (the iPhone over the tailnet) and may carry electro_gui's
 ``?token=`` — leave it empty to hide the button there.  It is re-read on every
 page load, so an edit needs only a reload.

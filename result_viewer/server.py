@@ -105,7 +105,7 @@ class Tailnet:
 
 class App:
     def __init__(self, catalog, notebooks, data_dir, configs_root, tailnet, electro_gui_url=None,
-                 electro_gui_remote_url=None, electro_gui_repo=None, electro_gui_python=None):
+                 electro_gui_remote_url=None, electro_gui_repo=None, electro_gui_python=None, apps_dashboard_url=None):
         self.catalog = catalog
         self.notebooks = notebooks
         self.data_dir = Path(data_dir)
@@ -113,18 +113,35 @@ class App:
         self.tailnet = tailnet
         self.eg_override = {"local": electro_gui_url, "tailnet": electro_gui_remote_url}
         self._launcher = electro_gui.Launcher(None, self.configs_root, electro_gui_repo, electro_gui_python)
+        self.apps_dashboard_url = apps_dashboard_url
         self.started = time.time()
         self._probe = {}
+        self._found = (None, None, None)  # (when, configured URL, URL found) of the last dashboard lookup
 
     def settings(self):
         return load_settings(self.data_dir)
 
     def electro_gui_url(self, where, settings=None):
+        """The command line's URL, else (on this Mac) the electro_gui running here, else settings.json's."""
         settings = settings or self.settings()
         override = self.eg_override.get(where)
         if override is not None:
             return override
-        return settings["electro_gui"]["url" if where == "local" else "remote_url"]
+        if where != "local":
+            return settings["electro_gui"]["remote_url"]
+        configured = settings["electro_gui"]["url"]
+        return self.running_electro_gui(configured) or configured
+
+    def running_electro_gui(self, configured):
+        """The electro_gui the apps dashboard sees up on this Mac (asked at most every 10 s), or None."""
+        if not self.apps_dashboard_url:
+            return None
+        now = time.monotonic()
+        when, asked, url = self._found
+        if when is None or now - when > 10 or asked != configured:
+            url = electro_gui.from_dashboard(self.apps_dashboard_url, configured)
+            self._found = (now, configured, url)
+        return url
 
     def electro_gui_running(self, url):
         now = time.monotonic()

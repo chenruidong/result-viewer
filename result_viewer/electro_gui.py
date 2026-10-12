@@ -1,12 +1,14 @@
 """Hand units to electro_gui (analysis_imitation/electro_gui).
 
-Three ways, none of which needs a change to electro_gui:
+Four ways, none of which needs a change to electro_gui:
 
 * **Deep link.**  electro_gui keeps its whole view in the address bar as
   ``#s=<base64url(UTF-8 JSON state)>`` (``static/core.js`` ``encodeState``) and
   fills every missing key with its defaults, so ``{"session", "unit"}`` opens a
   unit.  Its unit picker lists SUA and MUA only by default (``unitQ``); a link
   to any other unit widens that list so the unit stays selectable.
+* **Finding it.**  ``from_dashboard`` asks this Mac's apps dashboard which
+  electro_gui is up, whatever its port, so the link goes to the one running.
 * **Config files.**  Every noted unit is mirrored to
   ``<data>/electro_gui/<sid>/electro_gui_configs/unit_NNNN.json`` in electro_gui's
   config-file format (``electro_gui/configs.py``).  Launch electro_gui with
@@ -21,6 +23,7 @@ from __future__ import annotations
 
 import base64
 import json
+import re
 import socket
 import subprocess
 import threading
@@ -40,6 +43,8 @@ PYTHON_CANDIDATES = ("~/miniconda/envs/imitation-phys/bin/python", "~/miniforge3
                      "~/anaconda3/envs/imitation-phys/bin/python")
 START_LOG = "~/Library/Logs/electro_gui.log"
 LOOPBACK = ("127.0.0.1", "localhost", "::1")
+DASHBOARD_URL = "http://127.0.0.1:8790"
+_RUNS_ELECTRO_GUI = re.compile(r"(?:^|\s)-m\s+electro_gui(?:\s|$)|(?:^|/)electro-gui(?:\s|$)")
 
 
 def view_state(sid, unit_id, quality=None):
@@ -137,6 +142,52 @@ def probe(base_url, timeout=2.0):
         return True
     except (OSError, ValueError):
         return False
+
+
+def from_dashboard(dashboard_url, prefer=None, timeout=3.0):
+    """The URL of an electro_gui the apps dashboard sees up on this Mac, or None.
+
+    Reads the dashboard's ``/api/apps`` (github.com/chenruidong/apps-dashboard),
+    a scan of this Mac's listening processes, so an electro_gui started by hand
+    on any port is found; see ``pick_running`` for which one.  None when the
+    dashboard does not answer or sees none.
+    """
+    parts = urlsplit(dashboard_url)
+    try:
+        with urllib.request.urlopen(urlunsplit((parts.scheme, parts.netloc, "/api/apps", "", "")), timeout=timeout) as resp:
+            apps = json.load(resp).get("apps")
+    except (OSError, ValueError, AttributeError):
+        return None
+    return pick_running(apps, prefer)
+
+
+def pick_running(apps, prefer=None):
+    """From the dashboard's ``apps``: an electro_gui that is up on a loopback URL, or None.
+
+    An app counts when its process runs ``-m electro_gui`` (or ``electro-gui``)
+    or it is registered as ``electro_gui``.  The one on ``prefer``'s port wins,
+    then the most recently started.
+    """
+    try:
+        want = urlsplit(prefer or "").port
+    except ValueError:
+        want = None
+    found = []
+    for app in apps if isinstance(apps, list) else ():
+        if not isinstance(app, dict) or app.get("status") != "up":
+            continue
+        process = app.get("process") or {}
+        if app.get("id") != "electro_gui" and not _RUNS_ELECTRO_GUI.search(process.get("command") or ""):
+            continue
+        url = ((app.get("local") or {}).get("url") or "").rstrip("/")
+        try:
+            parts = urlsplit(url)
+            port = parts.port
+        except ValueError:
+            continue
+        if parts.scheme == "http" and parts.hostname in LOOPBACK and port:
+            found.append((port == want, process.get("started") or "", url))
+    return max(found)[2] if found else None
 
 
 class Launcher:
