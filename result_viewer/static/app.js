@@ -559,13 +559,16 @@
     }
   }
 
-  $('img').addEventListener('click', e => {
+  // on #figure, not #img: while zoomed the pan below captures the pointer, so the click lands on #figure
+  const box = $('figure');
+  box.addEventListener('click', e => {
     if (suppressClick) { suppressClick = false; return; }
-    toggleZoom(null, e);
+    if (S.zoom) toggleZoom(false);
+    else if (e.target === $('img')) toggleZoom(true, e);
   });
 
-  const box = $('figure');
   box.addEventListener('pointerdown', e => {
+    suppressClick = false;
     if (!S.zoom || e.pointerType !== 'mouse' || e.button !== 0) return;
     drag = {x: e.clientX, y: e.clientY, left: box.scrollLeft, top: box.scrollTop, moved: false};
     box.setPointerCapture(e.pointerId);
