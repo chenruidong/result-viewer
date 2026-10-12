@@ -32,7 +32,7 @@ def _add_serve_args(parser):
     parser.add_argument("--electro-gui-remote-url", metavar="URL",
                         help="electro_gui for tailnet devices (overrides settings.json electro_gui.remote_url)")
     parser.add_argument("--electro-gui-repo", metavar="DIR",
-                        help="analysis_imitation checkout to start electro_gui from (default ~/code/analysis_imitation)")
+                        help="electrogui checkout to start electro_gui from (default ~/code/electrogui)")
     parser.add_argument("--electro-gui-python", metavar="PATH",
                         help="Python to start electro_gui with (default: the first imitation-phys env found)")
     parser.add_argument("--owner", metavar="LOGIN",

@@ -47,7 +47,7 @@ class ServerTest(unittest.TestCase):
         cls.data = data
         app = App(Catalog([base / "results"]), Notebooks(data), data, data / "electro_gui",
                   FixedTailnet(OWNER, [NODE]), electro_gui_url="http://127.0.0.1:9",
-                  electro_gui_repo=base / "no-analysis-imitation")  # never start the real electro_gui here
+                  electro_gui_repo=base / "no-electrogui")  # never start the real electro_gui here
         cls.server = make_server(app, "127.0.0.1", 0)
         cls.port = cls.server.server_address[1]
         threading.Thread(target=cls.server.serve_forever, daemon=True).start()

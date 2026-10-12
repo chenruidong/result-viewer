@@ -1,4 +1,4 @@
-"""Hand units to electro_gui (analysis_imitation/electro_gui).
+"""Hand units to electro_gui (~/code/electrogui, github.com/chenruidong/electrogui).
 
 Four ways, none of which needs a change to electro_gui:
 
@@ -16,8 +16,8 @@ Four ways, none of which needs a change to electro_gui:
   Config files, one section per session.  Files this module did not write
   (no ``"generator": "result-viewer"``) are never changed or removed.
 * **Starting it.**  When "open in electro_gui" finds nothing answering on this
-  Mac, ``Launcher`` starts it from the analysis_imitation checkout, the way it
-  is started by hand, with the config folder above added.
+  Mac, ``Launcher`` starts it from the electrogui checkout, the way it is
+  started by hand, with the config folder above added.
 """
 from __future__ import annotations
 
@@ -33,11 +33,12 @@ from pathlib import Path
 from urllib.parse import urlsplit, urlunsplit
 
 from .notebook import unit_heading, utc_now, write_atomic
+from .settings import dropbox_root
 
 GENERATOR = "result-viewer"
 NESTED = "electro_gui_configs"
 DEFAULT_QUALITIES = ("sua", "mua")
-DEFAULT_REPO = "~/code/analysis_imitation"
+DEFAULT_REPO = "~/code/electrogui"
 PYTHON_CANDIDATES = ("~/miniconda/envs/imitation-phys/bin/python", "~/miniforge3/envs/imitation-phys/bin/python",
                      "~/miniconda3/envs/imitation-phys/bin/python", "~/mambaforge/envs/imitation-phys/bin/python",
                      "~/anaconda3/envs/imitation-phys/bin/python")
@@ -190,19 +191,27 @@ def pick_running(apps, prefer=None):
     return max(found)[2] if found else None
 
 
+def presentation_dir():
+    """electro_gui's default config folder (its ``paths.presentation_dir``), or None without Dropbox."""
+    root = dropbox_root()
+    return root / "projects" / "analysis_imitation" / "data" / "output" / "presentation" if root else None
+
+
 class Launcher:
     """Start electro_gui on this Mac when "open in electro_gui" finds nothing answering.
 
     Runs ``<python> -m electro_gui --no-browser --port <port of url> --config-dir
-    output/presentation --config-dir <configs_root>`` in the analysis_imitation
-    checkout (its defaults otherwise, so caches and saved views land where a
-    hand-started electro_gui puts them), in a session of its own so it outlives a
-    viewer restart, with its output appended to ``~/Library/Logs/electro_gui.log``.
-    Only a loopback ``url`` is started; the Python is the first imitation-phys
+    <presentation_dir> --config-dir <configs_root>`` in the electrogui checkout
+    (its defaults otherwise, so caches and findings land where a hand-started
+    electro_gui puts them), in a session of its own so it outlives a viewer
+    restart, with its output appended to ``~/Library/Logs/electro_gui.log``.
+    ``--config-dir`` replaces electro_gui's default folder rather than adding to
+    it, so that default is passed too (``config_dirs`` replaces it here).  Only a
+    loopback ``url`` is started; the Python is the first imitation-phys
     environment found unless one is given.
     """
 
-    def __init__(self, url, configs_root, repo=None, python=None, log_path=START_LOG):
+    def __init__(self, url, configs_root, repo=None, python=None, log_path=START_LOG, config_dirs=None):
         self.url = url or ""
         self.configs_root = Path(configs_root)
         self.repo = Path(repo or DEFAULT_REPO).expanduser()
@@ -211,6 +220,9 @@ class Launcher:
         else:
             self.python = next((Path(c).expanduser() for c in PYTHON_CANDIDATES if Path(c).expanduser().is_file()), None)
         self.log_path = Path(log_path).expanduser()
+        if config_dirs is None:
+            config_dirs = [d for d in (presentation_dir(),) if d is not None]
+        self.config_dirs = [Path(d) for d in config_dirs] + [self.configs_root]
         self._proc = None
         self._lock = threading.Lock()
 
@@ -232,9 +244,11 @@ class Launcher:
             return "no imitation-phys Python found (pass --electro-gui-python)"
         return None
 
+    def config_args(self):
+        return [arg for folder in self.config_dirs for arg in ("--config-dir", str(folder))]
+
     def command(self):
-        return [str(self.python), "-m", "electro_gui", "--no-browser", "--port", str(self.port()),
-                "--config-dir", "output/presentation", "--config-dir", str(self.configs_root)]
+        return [str(self.python), "-m", "electro_gui", "--no-browser", "--port", str(self.port()), *self.config_args()]
 
     def state(self):
         proc = self._proc

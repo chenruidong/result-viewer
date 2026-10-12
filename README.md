@@ -2,7 +2,7 @@
 
 Flip through the per-unit figures of the Engaging results (unit rate rasters by default) with the
 keyboard, mouse or touch, and keep a **notebook per session** — a note, number-key tags and a flag
-per unit — in MIT Dropbox. Units you note show up in **electro_gui** (analysis_imitation), and every
+per unit — in MIT Dropbox. Units you note show up in **electro_gui** (`~/code/electrogui`), and every
 unit opens there with one key.
 
 Python 3.8+ standard library only; no build step.
@@ -96,11 +96,14 @@ after editing.
   SUA/MUA the link also widens electro_gui's unit picker (`unitQ`) so the unit stays selectable.
 * **Starting it**: when nothing answers at that URL, `e` shows "Starting electro_gui…" in that tab,
   the viewer starts it as you would by hand —
-  `cd ~/code/analysis_imitation && <imitation-phys python> -m electro_gui --no-browser --port 8765
-  --config-dir output/presentation --config-dir <data>/electro_gui` — and the tab moves on to the
+  `cd ~/code/electrogui && <imitation-phys python> -m electro_gui --no-browser --port 8765
+  --config-dir <Dropbox>/projects/analysis_imitation/data/output/presentation
+  --config-dir <data>/electro_gui` — and the tab moves on to the
   unit once electro_gui answers (the first load of a session then verifies its NWB, as usual). The
   Python is the first `imitation-phys` env under `~/miniconda`, `~/miniforge3`, `~/miniconda3`,
   `~/mambaforge` or `~/anaconda3`; override with `--electro-gui-python` / `--electro-gui-repo`.
+  The presentation folder is electro_gui's own default, passed explicitly because `--config-dir`
+  replaces the default instead of adding to it.
   It runs in a session of its own, so it keeps running after the viewer restarts; its output goes
   to `~/Library/Logs/electro_gui.log`. Stop it with `kill $(lsof -t -iTCP:8765 -sTCP:LISTEN)`.
   Only the Mac running the viewer can start it.
@@ -109,8 +112,9 @@ after editing.
   `Unit 4 · NOISE · ACC · ch 22 ★` with the tags and first line of the note as the hint:
 
   ```bash
-  cd ~/code/analysis_imitation
-  python -m electro_gui --config-dir output/presentation \
+  cd ~/code/electrogui
+  python -m electro_gui \
+    --config-dir "$HOME/MIT Dropbox/Ruidong Chen/projects/analysis_imitation/data/output/presentation" \
     --config-dir "$HOME/MIT Dropbox/Ruidong Chen/projects/result-viewer/data/electro_gui"
   ```
 

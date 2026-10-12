@@ -9,6 +9,7 @@ import threading
 import time
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from result_viewer import electro_gui
 from result_viewer.catalog import Catalog
@@ -37,13 +38,13 @@ def free_port():
 class LauncherTest(unittest.TestCase):
     def setUp(self):
         self.tmp = tempfile.TemporaryDirectory()
-        self.repo = Path(self.tmp.name) / "analysis_imitation"
+        self.repo = Path(self.tmp.name) / "electrogui"
         (self.repo / "electro_gui").mkdir(parents=True)
         (self.repo / "electro_gui" / "__init__.py").write_text("")
         (self.repo / "electro_gui" / "__main__.py").write_text(FAKE_MAIN)
         self.url = f"http://127.0.0.1:{free_port()}"
         self.launcher = electro_gui.Launcher(self.url, Path(self.tmp.name) / "configs", self.repo, sys.executable,
-                                             Path(self.tmp.name) / "electro_gui.log")
+                                             Path(self.tmp.name) / "electro_gui.log", [Path(self.tmp.name) / "decks"])
         self.pid = None
 
     def tearDown(self):
@@ -67,7 +68,8 @@ class LauncherTest(unittest.TestCase):
         self.assertEqual(self.launcher.start(), {"started": False, "running": True})
         args = json.loads((self.repo / "argv.json").read_text())
         self.assertEqual(args[:3], ["--no-browser", "--port", self.url.rsplit(":", 1)[1]])
-        self.assertEqual(args[3:], ["--config-dir", "output/presentation", "--config-dir", str(Path(self.tmp.name) / "configs")])
+        self.assertEqual(args[3:], ["--config-dir", str(Path(self.tmp.name) / "decks"),
+                                    "--config-dir", str(Path(self.tmp.name) / "configs")])
         self.assertIn("started by result-viewer", (Path(self.tmp.name) / "electro_gui.log").read_text())
         self.assertTrue(self.launcher.state()["starting"])  # the process is alive
 
@@ -77,6 +79,17 @@ class LauncherTest(unittest.TestCase):
         self.assertIn("no electro_gui URL", electro_gui.Launcher("", "/x", self.repo, sys.executable).problem())
         self.assertIn("no electro_gui package", electro_gui.Launcher(self.url, "/x", self.repo / "nope", sys.executable).problem())
         self.assertEqual(electro_gui.Launcher(self.url, "/x", Path(self.tmp.name) / "nope", sys.executable).start()["started"], False)
+
+    def test_defaults_electrogui_checkout_and_its_presentation_folder(self):
+        dropbox = Path(self.tmp.name) / "Dropbox"
+        with mock.patch.object(electro_gui, "dropbox_root", return_value=dropbox):
+            launcher = electro_gui.Launcher(self.url, "/x", python=sys.executable)
+        self.assertEqual(launcher.repo, Path("~/code/electrogui").expanduser())
+        self.assertEqual(launcher.config_args(), [
+            "--config-dir", str(dropbox / "projects" / "analysis_imitation" / "data" / "output" / "presentation"),
+            "--config-dir", "/x"])
+        with mock.patch.object(electro_gui, "dropbox_root", return_value=None):  # no Dropbox: the viewer's folder only
+            self.assertEqual(electro_gui.Launcher(self.url, "/x").config_args(), ["--config-dir", "/x"])
 
 
 def dash_app(id_, port, status="up", command=None, started="2026-10-09T20:07:21Z", host="127.0.0.1"):

@@ -29,7 +29,7 @@
     if (!sameOrigin(target())) return fail('This is not a link to electro_gui.');
     const esc = s => String(s).replace(/[&<>"]/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;'}[c]));
     const byHand = `To start it by hand:<br><code>${esc(cfg.electro_gui.launch)}</code>`;
-    $('msg').textContent = `Starting it from analysis_imitation. This tab opens the unit as soon as electro_gui answers at ${base}.`;
+    $('msg').textContent = `Starting it from the electrogui checkout. This tab opens the unit as soon as electro_gui answers at ${base}.`;
     let start;
     try { start = await api('/api/electro_gui/start', {method: 'POST', body: '{}'}); } catch (e) { return fail(e.message, byHand); }
     if (start.error) return fail(start.error, byHand);

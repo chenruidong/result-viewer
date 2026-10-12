@@ -348,9 +348,9 @@ def make_handler(app):
             settings = app.settings()
             url = app.electro_gui_url(where, settings)
             launcher = app.launcher(settings)
-            by_hand = (f"cd {shlex.quote(str(launcher.repo))} && "
-                       + " ".join(shlex.quote(a) for a in launcher.command()) if launcher.python and launcher.port()
-                       else f"python -m electro_gui --config-dir output/presentation --config-dir {shlex.quote(str(app.configs_root))}")
+            args = (launcher.command() if launcher.python and launcher.port()
+                    else ["python", "-m", "electro_gui", *launcher.config_args()])
+            by_hand = f"cd {shlex.quote(str(launcher.repo))} && " + " ".join(shlex.quote(a) for a in args)
             return {"version": __version__, "host": host_tag(), "where": where, "tags": settings["tags"],
                     "electro_gui": {"url": url, "launch": by_hand,
                                     "can_start": where == "local" and bool(url) and launcher.problem() is None},
