@@ -116,32 +116,45 @@ class App:
         self.apps_dashboard_url = apps_dashboard_url
         self.started = time.time()
         self._probe = {}
-        self._found = (None, None, None)  # (when, configured URL, URL found) of the last dashboard lookup
+        self._found = (None, None, None)  # (when, configured URL, URLs found) of the last dashboard lookup
 
     def settings(self):
         return load_settings(self.data_dir)
 
     def electro_gui_url(self, where, settings=None):
-        """The command line's URL, else (on this Mac) the electro_gui running here, else settings.json's."""
+        return self.electro_gui_target(where, settings)[0]
+
+    def electro_gui_target(self, where, settings=None):
+        """(URL the page opens, URL whose answer is the button's on/off dot).
+
+        The command line's URL, else this Mac's electro_gui as the dashboard
+        sees it — on this Mac the one running, on other devices its ``tailscale
+        serve`` address, on/off from the loopback URL behind it — else
+        settings.json's ``url`` / ``remote_url``.
+        """
         settings = settings or self.settings()
         override = self.eg_override.get(where)
         if override is not None:
-            return override
-        if where != "local":
-            return settings["electro_gui"]["remote_url"]
-        configured = settings["electro_gui"]["url"]
-        return self.running_electro_gui(configured) or configured
+            return override, override
+        found = self.found_electro_gui(settings["electro_gui"]["url"])
+        if where == "local":
+            url = found["local"] or settings["electro_gui"]["url"]
+            return url, url
+        if found["tailnet"]:
+            return found["tailnet"], found["behind"]
+        url = settings["electro_gui"]["remote_url"]
+        return url, url
 
-    def running_electro_gui(self, configured):
-        """The electro_gui the apps dashboard sees up on this Mac (asked at most every 10 s), or None."""
+    def found_electro_gui(self, configured):
+        """``electro_gui.pick``'s URLs from the apps dashboard (asked at most every 10 s), all None without it."""
         if not self.apps_dashboard_url:
-            return None
+            return electro_gui.pick(None)
         now = time.monotonic()
-        when, asked, url = self._found
+        when, asked, found = self._found
         if when is None or now - when > 10 or asked != configured:
-            url = electro_gui.from_dashboard(self.apps_dashboard_url, configured)
-            self._found = (now, configured, url)
-        return url
+            found = electro_gui.from_dashboard(self.apps_dashboard_url, configured)
+            self._found = (now, configured, found)
+        return found
 
     def electro_gui_running(self, url):
         now = time.monotonic()
@@ -390,8 +403,8 @@ def make_handler(app):
                               "configs": str(electro_gui.config_path(app.configs_root, sid, 0).parent)}}
 
         def electro_gui_status(self, query, where):
-            url = app.electro_gui_url(where)
-            out = {"url": url, "running": bool(url) and app.electro_gui_running(url)}
+            url, behind = app.electro_gui_target(where)
+            out = {"url": url, "running": bool(url) and app.electro_gui_running(behind)}
             if where == "local":
                 out["launch"] = app.launcher().state()
             return out

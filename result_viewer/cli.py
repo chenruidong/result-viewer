@@ -30,7 +30,7 @@ def _add_serve_args(parser):
                         help="apps dashboard asked which electro_gui runs on this Mac, on any port "
                              f"(default {electro_gui.DASHBOARD_URL}; '' to use settings.json electro_gui.url only)")
     parser.add_argument("--electro-gui-remote-url", metavar="URL",
-                        help="electro_gui for tailnet devices (overrides settings.json electro_gui.remote_url)")
+                        help="electro_gui for tailnet devices (overrides the apps dashboard and settings.json electro_gui.remote_url)")
     parser.add_argument("--electro-gui-repo", metavar="DIR",
                         help="electrogui checkout to start electro_gui from (default ~/code/electrogui)")
     parser.add_argument("--electro-gui-python", metavar="PATH",

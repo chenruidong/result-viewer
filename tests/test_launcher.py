@@ -92,11 +92,19 @@ class LauncherTest(unittest.TestCase):
             self.assertEqual(electro_gui.Launcher(self.url, "/x").config_args(), ["--config-dir", "/x"])
 
 
-def dash_app(id_, port, status="up", command=None, started="2026-10-09T20:07:21Z", host="127.0.0.1"):
-    """One entry of the apps dashboard's /api/apps ``apps`` list (the fields read here)."""
-    return {"id": id_, "status": status, "local": {"url": f"http://{host}:{port}/", "port": port},
-            "process": {"command": command or f"/envs/imitation-phys/bin/python -m electro_gui --no-browser --port {port}",
-                        "started": started}}
+def dash_app(id_, port, status="up", command=None, started="2026-10-09T20:07:21Z", host="127.0.0.1",
+             peer=False, served=None, launchd=None):
+    """One entry of the apps dashboard's /api/apps ``apps`` list (the fields read here).
+
+    ``served``: the https port ``tailscale serve`` proxies to ``port``; ``launchd``: the
+    LaunchAgent's program.  A stopped app (status other than up) has no process.
+    """
+    command = command or f"/envs/imitation-phys/bin/python -m electro_gui --no-browser --port {port}"
+    routes = [{"url": f"https://node.tail0000.ts.net:{served}/", "kind": "proxy", "target": f"http://127.0.0.1:{port}",
+               "stale": False}] if served else []
+    return {"id": id_, "status": status, "peer": peer, "local": {"url": f"http://{host}:{port}/", "port": port},
+            "process": {"command": command, "started": started} if status == "up" else None,
+            "launchd": {"program": launchd} if launchd else None, "routes": routes}
 
 
 class FakeDashboard:
@@ -130,8 +138,10 @@ class FakeDashboard:
 
 
 class DashboardTest(unittest.TestCase):
-    def test_pick_running(self):
-        pick = electro_gui.pick_running
+    def test_pick_local(self):
+        def pick(apps, prefer=None):
+            return electro_gui.pick(apps, prefer)["local"]
+
         here = dash_app("electrogui", 8778)
         self.assertEqual(pick([here]), "http://127.0.0.1:8778")
         self.assertEqual(pick([dash_app("rv", 8766, command="python -m result_viewer serve"), here]), "http://127.0.0.1:8778")
@@ -146,14 +156,43 @@ class DashboardTest(unittest.TestCase):
         newer = dash_app("b", 8778, started="2026-10-09T00:00:00Z")
         self.assertEqual(pick([older, newer]), "http://127.0.0.1:8778")  # most recently started
         self.assertEqual(pick([older, newer], prefer="http://127.0.0.1:8765"), "http://127.0.0.1:8765")  # configured port
+        # the dashboard lists its peers' apps too; their loopback URLs are other Macs' ports (8790 is the dashboard here)
+        mini = dash_app("electrogui", 8790, started="2026-10-14T00:00:00Z", peer=True)
+        self.assertIsNone(pick([mini]))
+        self.assertEqual(pick([newer, mini]), "http://127.0.0.1:8778")
+
+    def test_pick_tailnet(self):
+        pick = electro_gui.pick
+        self.assertEqual(pick([dash_app("electrogui", 8778)])["tailnet"], None)  # not published
+        found = pick([dash_app("electrogui", 8778, served=8778)])
+        self.assertEqual((found["tailnet"], found["behind"]), ("https://node.tail0000.ts.net:8778/", "http://127.0.0.1:8778"))
+        # stopped: still linked (found by its LaunchAgent), and the dot asks the loopback URL behind it
+        stopped = dash_app("electrogui", 8778, status="down", served=8778,
+                           launchd="/envs/imitation-phys/bin/python -m electro_gui --port 8778")
+        found = pick([stopped])
+        self.assertEqual((found["local"], found["tailnet"], found["behind"]),
+                         (None, "https://node.tail0000.ts.net:8778/", "http://127.0.0.1:8778"))
+        self.assertIsNone(pick([dash_app("x", 8778, status="down", served=8778)])["tailnet"])  # not electro_gui
+        # one that is up wins over one that is not; peers and stale or non-proxy routes never count
+        self.assertEqual(pick([stopped, dash_app("b", 8779, served=9443)])["tailnet"], "https://node.tail0000.ts.net:9443/")
+        self.assertIsNone(pick([dash_app("electrogui", 8790, peer=True, served=8443)])["tailnet"])
+        stale = dash_app("electrogui", 8778, served=8778)
+        stale["routes"][0]["stale"] = True
+        self.assertIsNone(pick([stale])["tailnet"])
+        files = dash_app("electrogui", 8778, served=8778)
+        files["routes"][0].update(kind="path", target="/srv/site")
+        self.assertIsNone(pick([files])["tailnet"])
 
     def test_from_dashboard(self):
-        dash = FakeDashboard([dash_app("electrogui", 8778)])
+        dash = FakeDashboard([dash_app("electrogui", 8778, served=8778)])
         try:
-            self.assertEqual(electro_gui.from_dashboard(dash.url), "http://127.0.0.1:8778")
+            self.assertEqual(electro_gui.from_dashboard(dash.url),
+                             {"local": "http://127.0.0.1:8778", "tailnet": "https://node.tail0000.ts.net:8778/",
+                              "behind": "http://127.0.0.1:8778"})
         finally:
             dash.close()
-        self.assertIsNone(electro_gui.from_dashboard(f"http://127.0.0.1:{free_port()}", timeout=1))  # nothing listening
+        self.assertEqual(electro_gui.from_dashboard(f"http://127.0.0.1:{free_port()}", timeout=1),  # nothing listening
+                         {"local": None, "tailnet": None, "behind": None})
 
     def test_viewer_uses_the_running_electro_gui_on_this_mac_only(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -165,7 +204,7 @@ class DashboardTest(unittest.TestCase):
                 found = app(apps_dashboard_url=dash.url)
                 self.assertEqual(found.electro_gui_url("local"), "http://127.0.0.1:8778")
                 self.assertEqual(found.launcher().url, "http://127.0.0.1:8778")
-                self.assertEqual(found.electro_gui_url("tailnet"), "")  # remote_url: never a loopback URL
+                self.assertEqual(found.electro_gui_url("tailnet"), "")  # not published: remote_url, never a loopback URL
                 self.assertEqual(dash.calls, 1)  # asked once, then reused
                 dash.apps = []
                 self.assertEqual(found.electro_gui_url("local"), "http://127.0.0.1:8778")  # within 10 s
@@ -175,6 +214,31 @@ class DashboardTest(unittest.TestCase):
                                  "http://127.0.0.1:9")
                 self.assertEqual(app().electro_gui_url("local"), "http://127.0.0.1:8765")  # lookup off
                 self.assertEqual(dash.calls, 2)
+            finally:
+                dash.close()
+
+    def test_tailnet_link_is_this_macs_published_electro_gui(self):
+        """Over the tailnet the button opens electro_gui's tailscale serve address; its dot is the loopback answer."""
+        with tempfile.TemporaryDirectory() as tmp:
+            eg = FakeDashboard([])  # stands in for electro_gui: any HTTP answer counts as up
+            port = eg.server.server_address[1]
+            dash = FakeDashboard([dash_app("electrogui", port, served=port)])
+            try:
+                def app(**kw):
+                    return App(Catalog([]), Notebooks(tmp), tmp, Path(tmp) / "electro_gui", None,
+                               apps_dashboard_url=dash.url, **kw)
+
+                viewer = app()
+                served = f"https://node.tail0000.ts.net:{port}/"
+                self.assertEqual(viewer.electro_gui_target("tailnet"), (served, eg.url))
+                self.assertTrue(viewer.electro_gui_running(eg.url))
+                self.assertEqual(viewer.electro_gui_target("local"), (eg.url, eg.url))
+                self.assertEqual(app(electro_gui_remote_url="https://elsewhere/").electro_gui_target("tailnet"),
+                                 ("https://elsewhere/", "https://elsewhere/"))  # the command line still wins
+                eg.close()
+                viewer._probe.clear()
+                self.assertFalse(viewer.electro_gui_running(eg.url))  # off, link kept
+                self.assertEqual(viewer.electro_gui_url("tailnet"), served)
             finally:
                 dash.close()
 

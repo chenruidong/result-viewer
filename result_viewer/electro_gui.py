@@ -8,7 +8,8 @@ Four ways, none of which needs a change to electro_gui:
   unit.  Its unit picker lists SUA and MUA only by default (``unitQ``); a link
   to any other unit widens that list so the unit stays selectable.
 * **Finding it.**  ``from_dashboard`` asks this Mac's apps dashboard which
-  electro_gui is up, whatever its port, so the link goes to the one running.
+  electro_gui is up, whatever its port, so the link goes to the one running,
+  and where ``tailscale serve`` publishes it, for the link on other devices.
 * **Config files.**  Every noted unit is mirrored to
   ``<data>/electro_gui/<sid>/electro_gui_configs/unit_NNNN.json`` in electro_gui's
   config-file format (``electro_gui/configs.py``).  Launch electro_gui with
@@ -146,39 +147,47 @@ def probe(base_url, timeout=2.0):
 
 
 def from_dashboard(dashboard_url, prefer=None, timeout=3.0):
-    """The URL of an electro_gui the apps dashboard sees up on this Mac, or None.
+    """Where the apps dashboard sees electro_gui on this Mac: ``pick``'s URLs.
 
     Reads the dashboard's ``/api/apps`` (github.com/chenruidong/apps-dashboard),
-    a scan of this Mac's listening processes, so an electro_gui started by hand
-    on any port is found; see ``pick_running`` for which one.  None when the
-    dashboard does not answer or sees none.
+    a scan of this Mac's listening processes, LaunchAgents and ``tailscale
+    serve`` routes, so an electro_gui started by hand on any port is found; see
+    ``pick`` for which one.  All None when the dashboard does not answer.
     """
     parts = urlsplit(dashboard_url)
     try:
         with urllib.request.urlopen(urlunsplit((parts.scheme, parts.netloc, "/api/apps", "", "")), timeout=timeout) as resp:
             apps = json.load(resp).get("apps")
     except (OSError, ValueError, AttributeError):
-        return None
-    return pick_running(apps, prefer)
+        apps = None
+    return pick(apps, prefer)
 
 
-def pick_running(apps, prefer=None):
-    """From the dashboard's ``apps``: an electro_gui that is up on a loopback URL, or None.
+def pick(apps, prefer=None):
+    """From the dashboard's ``apps``: ``{"local", "tailnet", "behind"}`` URLs of this Mac's electro_gui.
 
-    An app counts when its process runs ``-m electro_gui`` (or ``electro-gui``)
-    or it is registered as ``electro_gui``.  The one on ``prefer``'s port wins,
-    then the most recently started.
+    ``local`` is one that is up on a loopback URL: the one on ``prefer``'s port
+    wins, then the most recently started.  ``tailnet`` is the ``tailscale
+    serve`` address of one, up or not (one that is up first, then the same
+    order), and ``behind`` the loopback URL it proxies, whose answer says
+    whether it is up.  Each is None when there is no such app.
+
+    An app counts when it is this Mac's (the dashboard also lists its peers'
+    apps, whose loopback URLs mean nothing here) and its process or its
+    LaunchAgent runs ``-m electro_gui`` (or ``electro-gui``), or it is
+    registered as ``electro_gui``.
     """
     try:
         want = urlsplit(prefer or "").port
     except ValueError:
         want = None
-    found = []
+    up, served = [], []
     for app in apps if isinstance(apps, list) else ():
-        if not isinstance(app, dict) or app.get("status") != "up":
+        if not isinstance(app, dict) or app.get("peer"):
             continue
         process = app.get("process") or {}
-        if app.get("id") != "electro_gui" and not _RUNS_ELECTRO_GUI.search(process.get("command") or ""):
+        commands = (process.get("command"), (app.get("launchd") or {}).get("program"))
+        if app.get("id") != "electro_gui" and not any(_RUNS_ELECTRO_GUI.search(c or "") for c in commands):
             continue
         url = ((app.get("local") or {}).get("url") or "").rstrip("/")
         try:
@@ -186,9 +195,30 @@ def pick_running(apps, prefer=None):
             port = parts.port
         except ValueError:
             continue
-        if parts.scheme == "http" and parts.hostname in LOOPBACK and port:
-            found.append((port == want, process.get("started") or "", url))
-    return max(found)[2] if found else None
+        if parts.scheme != "http" or parts.hostname not in LOOPBACK or not port:
+            continue
+        rank = (app.get("status") == "up", port == want, process.get("started") or "")
+        if rank[0]:
+            up.append((rank, url))
+        address = _served_at(app.get("routes"), port)
+        if address:
+            served.append((rank, address, url))
+    tailnet = max(served) if served else (None, None, None)
+    return {"local": max(up)[1] if up else None, "tailnet": tailnet[1], "behind": tailnet[2]}
+
+
+def _served_at(routes, port):
+    """The address of the dashboard ``routes`` entry (``tailscale serve``) that proxies to loopback ``port``, or None."""
+    for route in routes if isinstance(routes, list) else ():
+        if not isinstance(route, dict) or route.get("kind") != "proxy" or route.get("stale"):
+            continue
+        try:
+            target = urlsplit(route.get("target") or "")
+            if target.hostname in LOOPBACK and target.port == port and route.get("url"):
+                return route["url"]
+        except ValueError:
+            continue
+    return None
 
 
 def presentation_dir():

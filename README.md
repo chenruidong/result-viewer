@@ -122,12 +122,20 @@ after editing.
 
 The button's dot is green when electro_gui answers. On the Mac running the viewer it opens the
 electro_gui that is running there, on whatever port: the viewer asks the apps dashboard
-(`http://127.0.0.1:8790/api/apps`, at most every 10 s) for an app that is up whose process runs
-`-m electro_gui`. Only when the dashboard does not answer or sees none does it use `settings.json` →
-`electro_gui.url` (default `http://127.0.0.1:8765`), which is also the port it starts one on.
+(`http://127.0.0.1:8790/api/apps`, at most every 10 s) for an app of this Mac (not one of the
+dashboard's peers) that is up and whose process runs `-m electro_gui`. Only when the dashboard does
+not answer or sees none does it use `settings.json` → `electro_gui.url` (default
+`http://127.0.0.1:8765`), which is also the port it starts one on.
 `--apps-dashboard-url ''` turns the lookup off; `--electro-gui-url` overrides both.
-`electro_gui.remote_url` is used on other devices (empty = no button there). For the phone, run electro_gui behind Tailscale with a fixed token
-and set `remote_url` to match:
+
+On other devices (the viewer opened over the tailnet) the button opens the address `tailscale serve`
+publishes this Mac's electro_gui at, as the dashboard sees it (an electro_gui process or LaunchAgent
+behind a `tailscale serve` proxy), and stays there while electro_gui is stopped; the dot then
+says whether the electro_gui behind it answers on this Mac. The iMac's LaunchAgent
+`com.ruidong.electrogui` (port 8778, `tailscale serve --bg --https=8778 http://127.0.0.1:8778`) is
+such an electro_gui; electro_gui lets the tailnet owner in without a token. Without one,
+`electro_gui.remote_url` is used (empty = no button there), and `--electro-gui-remote-url` overrides
+both. To publish a token-protected electro_gui by hand and set `remote_url` to match:
 
 ```bash
 python -m electro_gui --port 8777 --token <secret> --config-dir …   # loopback; the token guards proxied requests
