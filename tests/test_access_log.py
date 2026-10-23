@@ -82,15 +82,37 @@ class AttachTest(LogTest):
         made[0].server_close()
         return made[0].RequestHandlerClass
 
-    def test_attached_on_the_registered_port_only(self):
-        self.assertEqual(cli.DEFAULT_PORT, 8766)  # the dashboard registry's port for result-viewer
-        log = getattr(self.serve(8766), "_access_log", None)
-        self.assertIsInstance(log, AccessLog)
-        self.assertEqual((log.app_id, log.root, log.create), ("result-viewer", self.logs, False))
-        self.assertEqual(log.route_class("/api/notebook"), "api.notebook")
-        self.assertFalse(hasattr(self.serve(8767), "_access_log"))
+    def test_attached_on_the_registered_ports_only(self):
+        # The dashboard registry's port for result-viewer: 8766 on the iMac (also the default), 8767 on the Mac mini.
+        self.assertEqual((cli.DEFAULT_PORT, cli.ACCESS_LOG_PORTS), (8766, (8766, 8767)))
+        for port in cli.ACCESS_LOG_PORTS:
+            with self.subTest(port=port):
+                log = getattr(self.serve(port), "_access_log", None)
+                self.assertIsInstance(log, AccessLog)
+                self.assertEqual((log.app_id, log.root, log.create), ("result-viewer", self.logs, False))
+                self.assertEqual(log.route_class("/api/notebook"), "api.notebook")
+        self.assertFalse(hasattr(self.serve(8768), "_access_log"))  # a dev instance's port
         self.assertFalse(hasattr(self.serve(0, bind=True), "_access_log"))  # bound to some free port
         self.assertEqual(list(self.logs.iterdir()), [])  # attaching writes nothing
+
+    def test_mac_mini_port_still_answers_and_logs(self):
+        srv = server.Server(("127.0.0.1", 0), self.serve(8767))  # the handler cmd_serve gave the log, on a free port
+        srv.daemon_threads = False  # so server_close joins the request's thread, which writes its line after replying
+        threading.Thread(target=srv.serve_forever, daemon=True).start()
+        conn = http.client.HTTPConnection("127.0.0.1", srv.server_address[1], timeout=5)
+        try:
+            conn.request("GET", "/")
+            resp = conn.getresponse()
+            page = (resp.status, b"/static/app.js" in resp.read())
+        finally:
+            conn.close()
+            srv.shutdown()
+            srv.server_close()  # joins the request's thread (non-daemon above)
+        self.assertEqual(page, (200, True))
+        lines = [json.loads(line) for day in (self.logs / "result-viewer").glob("*.jsonl")
+                 for line in day.read_text().splitlines()]
+        self.assertEqual([(e["method"], e["route"], e["status"], e["via"]) for e in lines],
+                         [("GET", "page", 200, "local")])
 
     def test_tests_servers_log_nothing(self):
         srv = make_server(self.app(), "127.0.0.1", 0)

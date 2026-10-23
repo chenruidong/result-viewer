@@ -156,10 +156,13 @@ Requests through it carry `Tailscale-User-Login`; the server answers only this n
 `tailscale status --json`, or `--owner`), only for this node's MagicDNS name or a loopback `Host`, and
 refuses cross-site POSTs. A plain local browser (loopback `Host`, no Tailscale header) is always served.
 
-On port 8766 the server logs each request for the apps dashboard's usage page, one JSON line under
+On its registered port (8766 on the iMac, 8767 on the Mac mini: `ACCESS_LOG_PORTS` in `cli.py`) the
+server logs each request for the apps dashboard's usage page, one JSON line under
 `~/Library/Logs/tailnet-access/result-viewer/` (a route class from `ROUTES` in `server.py`, the Tailscale
 login and device address, never the path or query), and only on a Mac whose dashboard made that folder
-(`accesslog.py`, a verbatim copy of apps-dashboard's; `TAILNET_ACCESS_LOG=off` turns it off).
+(`accesslog.py`, a verbatim copy of apps-dashboard's; `TAILNET_ACCESS_LOG=off` turns it off). Both ports
+log on both Macs, so a dev run on the other Mac's port (a plain `./rv` on the Mac mini binds 8766) would log
+as result-viewer too: start it with `TAILNET_ACCESS_LOG=off` or another `--port`.
 
 **Home screen.** In Safari on the iPhone open the URL, then Share → Add to Home Screen: it is called
 "Rasters", has its own icon (a raster card with a gold star on a blue tile), and opens full screen

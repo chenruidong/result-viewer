@@ -16,8 +16,9 @@ module (keep it verbatim; the dashboard flags an old copy).  One line per reques
 under ``~/Library/Logs/tailnet-access/result-viewer/`` with the route class from
 ``ROUTES`` (never the path or query), the Tailscale login and device address; only
 on a Mac whose apps-dashboard has made that directory, and only when the server is
-bound to ``cli.DEFAULT_PORT`` (a dev instance on another port logs nothing).  Tests
-use ``make_server`` and log nothing.
+bound to a registered port, ``cli.ACCESS_LOG_PORTS`` (8766 on the iMac, 8767 on the
+Mac mini; a dev instance on another port logs nothing).  Tests use ``make_server``
+and log nothing.
 """
 from __future__ import annotations
 
