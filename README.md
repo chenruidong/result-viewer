@@ -156,6 +156,11 @@ Requests through it carry `Tailscale-User-Login`; the server answers only this n
 `tailscale status --json`, or `--owner`), only for this node's MagicDNS name or a loopback `Host`, and
 refuses cross-site POSTs. A plain local browser (loopback `Host`, no Tailscale header) is always served.
 
+On port 8766 the server logs each request for the apps dashboard's usage page, one JSON line under
+`~/Library/Logs/tailnet-access/result-viewer/` (a route class from `ROUTES` in `server.py`, the Tailscale
+login and device address, never the path or query), and only on a Mac whose dashboard made that folder
+(`accesslog.py`, a verbatim copy of apps-dashboard's; `TAILNET_ACCESS_LOG=off` turns it off).
+
 **Home screen.** In Safari on the iPhone open the URL, then Share → Add to Home Screen: it is called
 "Rasters", has its own icon (a raster card with a gold star on a blue tile), and opens full screen
 without Safari's bars (`apple-mobile-web-app-capable`, `manifest.webmanifest` with
@@ -185,6 +190,7 @@ result_viewer/
   electro_gui.py  deep links, config-file mirror, liveness probe
   settings.py     data folder, settings.json
   server.py       HTTP API + figure files, local/tailnet access rules
+  accesslog.py    tailnet access log (a verbatim copy of apps-dashboard's; keep it so)
   launchagent.py  com.ruidong.result-viewer
   cli.py          serve | rebuild | launchagent
   static/         index.html, app.css, app.js, eg-start.html/.js, icons, manifest (no build step)

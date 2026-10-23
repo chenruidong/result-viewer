@@ -52,7 +52,8 @@ def _data_dir(args):
 
 
 def cmd_serve(args):
-    from .server import App, Tailnet, make_server
+    from .accesslog import AccessLog, attach
+    from .server import ROUTES, App, Tailnet, make_server
 
     data_dir = _data_dir(args)
     load_settings(data_dir)
@@ -65,6 +66,8 @@ def cmd_serve(args):
         sys.exit(str(exc))
     except OSError as exc:
         sys.exit(f"Cannot listen on {args.host}:{args.port}: {exc.strerror or exc} (already running? try --port)")
+    if server.server_address[1] == DEFAULT_PORT:  # the real app only: a dev instance on another port logs nothing
+        attach(server.RequestHandlerClass, AccessLog("result-viewer", routes=ROUTES))
     url = f"http://{args.host}:{server.server_address[1]}/"
     mounted = [str(r) for r in app.catalog.roots if r.is_dir()]
     print(f"result-viewer {__version__} on {url}", flush=True)

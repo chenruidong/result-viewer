@@ -10,6 +10,14 @@ It listens on loopback only.  Two kinds of request are served:
 
 Anything else (a foreign ``Host`` from DNS rebinding, another tailnet user, a
 cross-site POST) gets 403.
+
+Access log: ``cli.cmd_serve`` attaches ``accesslog.py``, a copy of apps-dashboard's
+module (keep it verbatim; the dashboard flags an old copy).  One line per request
+under ``~/Library/Logs/tailnet-access/result-viewer/`` with the route class from
+``ROUTES`` (never the path or query), the Tailscale login and device address; only
+on a Mac whose apps-dashboard has made that directory, and only when the server is
+bound to ``cli.DEFAULT_PORT`` (a dev instance on another port logs nothing).  Tests
+use ``make_server`` and log nothing.
 """
 from __future__ import annotations
 
@@ -42,6 +50,13 @@ CONTENT_TYPES = {".html": "text/html; charset=utf-8", ".js": "text/javascript; c
 ROOT_FILES = {"/apple-touch-icon.png": "apple-touch-icon.png", "/apple-touch-icon-precomposed.png": "apple-touch-icon.png",
               "/favicon.ico": "favicon-32.png"}
 _STATIC_NAME = re.compile(r"^[A-Za-z0-9_.-]+$")
+# Route classes of the access log (exact paths, or prefixes ending in *; first match wins), never the path itself.
+# /api/notebook and /api/electro_gui are what the page polls, so they have classes of their own.
+ROUTES = [("/", "page"), ("/index.html", "page"), ("/static/eg-start.html", "page.eg-start"), ("/static/*", "static"),
+          ("/apple-touch-icon.png", "icon"), ("/apple-touch-icon-precomposed.png", "icon"), ("/favicon.ico", "icon"),
+          ("/fig/*", "fig"), ("/api/health", "health"), ("/api/config", "api.config"), ("/api/sessions", "api.sessions"),
+          ("/api/session", "api.session"), ("/api/note", "api.note"), ("/api/notebook", "api.notebook"),
+          ("/api/electro_gui/start", "api.electro_gui.start"), ("/api/electro_gui", "api.electro_gui"), ("/api/*", "api")]
 MAX_BODY = 256 * 1024
 TAILSCALE_CANDIDATES = ("tailscale", "/usr/local/bin/tailscale", "/opt/homebrew/bin/tailscale",
                         "/Applications/Tailscale.app/Contents/MacOS/Tailscale")
