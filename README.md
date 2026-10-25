@@ -70,7 +70,7 @@ has synced. If Dropbox still makes a "conflicted copy", the page says so; merge 
 | `]` `[` · `r` | next / previous figure · back to the raster |
 | `}` `{` | next / previous session |
 | `1`–`9` · `f` | toggle tag · flag |
-| `n` / `Enter` · `Esc` · `⌘↩` | write a note · done · save and go to the next unit |
+| `n` / `Enter` · `Esc` · `⌘↩` | open Unit note · close and keep changes · save and go to the next unit |
 | `z` / click | zoom to full resolution and back (drag to pan; zoom stays while you flip) |
 | `e` | open this unit in electro_gui |
 | `m` · `?` | hide the side panels · help |
@@ -80,7 +80,7 @@ filter by quality, full-session stability, area, flag, noted and tag, and the ar
 through the matches only. **Sort** (above the list) orders them by unit # (the default), firing rate
 or stable trials, highest first; click the active sort again (or `S`) to reverse it, and the value
 shows in each row. Units without a value sort last. The header shows the unit's rate and stable
-trials. Notes save as you type. The notebook column lists every noted unit of the session.
+trials. Notes save as you type. The note editor is closed by default: **Add note** or **Edit note** opens it, and a compact first-line preview keeps existing notes visible. **Close · keep changes** / `Esc` collapses the editor while autosave continues; pending or failed text stays available through **Resume draft** for that session and unit. **Save & close** waits for the note's save to finish before collapsing. **Discard unsaved** cancels only edits that have not entered the save queue; it cannot undo saved or queued writes. Switching units/sessions keeps the existing flush behavior without showing one unit's draft or save state on another. Leaving/reloading with pending note text prompts before it can be lost. Notebook JSON, markdown/config mirrors and storage are unchanged. The notebook column lists every noted unit of the session.
 
 On a phone the unit list and filters are behind ☰; swipe the figure for the next/previous unit, tap
 it to zoom. Landscape shows the raster largest.
@@ -200,3 +200,7 @@ result_viewer/
 scripts/make_icons.py   draws icon.svg / favicon.svg and renders the PNGs
 tests/            unittest, fake results tree in tests/helpers.py
 ```
+
+## Optional browser regressions
+
+The app still uses only the Python standard library at runtime. `node tests/browser_smoke.cjs` is an optional development check using Playwright/Chromium. It starts `tests.browser_server` with generated scratch results and notebooks only, on an ephemeral loopback port; it never reads the real results roots or notes, starts electro_gui, or changes the deployed service. It covers autosave/reload, optional-note disclosure, discard, queued/error/offline drafts, unit/session isolation, keyboard access and phone layout. Point `PLAYWRIGHT_MODULE` at an existing Playwright module and `CHROMIUM_EXECUTABLE` at its installed browser when they are not found by default. `SCREENSHOT_DIR` optionally records scratch UI renders. Run the required Python suite separately with `python3 -m unittest discover -s tests -t .`.

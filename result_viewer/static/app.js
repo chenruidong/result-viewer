@@ -86,7 +86,6 @@
       return;
     }
     if (store.get('focus', false)) document.body.classList.add('focus');
-    if (isPhone()) noteBox.placeholder = 'Note for this unit…';
     renderTagButtons();
     $('helpPaths').innerHTML = `Notes: <code>${esc(S.config.paths.notes)}</code><br>Results: ${S.config.roots.map(r => `<code>${esc(r)}</code>`).join(', ')}<br>v${esc(S.config.version)} on ${esc(S.config.host)}`;
     S.eg.url = S.config.electro_gui.url;
@@ -126,6 +125,7 @@
 
   async function openSession(sid, unitId = null, view = null) {
     flushNote();
+    setNoteOpen(false);
     $('title').textContent = `Loading ${prettySid(sid)}…`;
     let data;
     try {
@@ -378,7 +378,7 @@
   // -------------------------------------------------------------- the unit
   function go(id) {
     if (id == null || !S.byId.has(id)) return;
-    if (S.cur !== id) flushNote();
+    if (S.cur !== id) { flushNote(); setNoteOpen(false); }
     const changed = S.cur !== id;
     S.cur = id;
     store.set('last.' + S.sid, id);
@@ -412,10 +412,10 @@
 
   function renderUnit(changed) {
     const u = S.byId.get(S.cur);
-    const bits = [`Unit ${u.id}`, upper(u.quality), upper(u.area)];
-    if (u.peak_channel != null) bits.push(`ch ${u.peak_channel}`);
-    if (u.depth_um != null) bits.push(`${u.depth_um} µm`);
-    $('title').textContent = bits.filter(Boolean).join(' · ');
+    $('title').textContent = `Unit ${u.id}`;
+    $('unitMeta').innerHTML = `<span class="q ${esc(u.quality)}">${esc(upper(u.quality))}</span>` +
+      [upper(u.area), u.peak_channel != null ? `ch ${u.peak_channel}` : '', u.depth_um != null ? `${u.depth_um} µm` : '']
+        .filter(Boolean).map(v => `<span>${esc(v)}</span>`).join('');
     document.title = `Unit ${u.id} · ${prettySid(S.sid)}`;
     renderBadges();
     renderViews();
@@ -423,6 +423,7 @@
     renderNoteEditor(changed);
     renderTagState();
     renderPos();
+    renderCurrentSave();
     highlight();
   }
 
@@ -433,7 +434,7 @@
     if (u.in_units === false) html += '<span class="badge warn" title="The session\'s current units table (stability_per_unit.csv, same build as the NWB) has no such unit">not in the current units</span>';
     if (u.n_trials != null) {
       html += `<span class="badge${u.full_stable ? ' ok' : ''}" title="stability_per_unit.csv: session mean rate; trials in the stable block of ${u.n_trials} completed">` +
-        `${fmtRate(u.rate_hz)} Hz · ${u.full_stable ? `stable on all ${u.n_trials} trials` : `stable ${u.n_stable}/${u.n_trials} trials`}</span>`;
+        `${fmtRate(u.rate_hz)} Hz session mean · ${u.full_stable ? `stable on all ${u.n_trials} trials` : `stable ${u.n_stable}/${u.n_trials} trials`}</span>`;
     }
     if (u.relabelled_from && u.relabelled_from.length) html += `<span class="badge" title="Older rasters with other labels exist">relabelled · was ${esc(u.relabelled_from.map(upper).join(', '))}</span>`;
     if (fig && fig.label_in_figure) html += `<span class="badge warn" title="${esc(fig.name)}">this figure predates the relabel (labelled ${esc(upper(fig.label_in_figure))})</span>`;
@@ -613,15 +614,90 @@
   $('next').addEventListener('click', () => step(1));
 
   // ----------------------------------------------------------------- notes
-  let dirty = null, noteTimer = null, pending = 0, chain = Promise.resolve();
-  const noteBox = $('note');
-  const editingHere = () => document.activeElement === noteBox || (dirty && dirty.sid === S.sid && dirty.unit === S.cur);
+  let dirty = null, noteTimer = null, pending = 0, chain = Promise.resolve(), noteRevision = 0, noteEpoch = 0;
+  const noteBox = $('note'), noteDrafts = new Map(), saveStates = new Map(), pendingByUnit = new Map(), acknowledgedNotes = new Map();
+  const noteKey = (sid = S.sid, unit = S.cur) => JSON.stringify([sid, unit]);
+  const dirtyHere = () => dirty && dirty.sid === S.sid && dirty.unit === S.cur;
+  const editingHere = () => document.activeElement === noteBox || dirtyHere();
+
+  function renderNoteSummary() {
+    const draft = noteDrafts.get(noteKey()), e = entry(S.cur);
+    const text = draft ? draft.note : e ? e.note || '' : '';
+    const open = !$('notePanel').hidden;
+    $('noteToggle').disabled = S.cur == null;
+    $('noteToggle').textContent = open ? 'Close · keep changes' : draft ? 'Resume draft' : text.trim() ? 'Edit note' : 'Add note';
+    $('noteToggle').setAttribute('aria-expanded', String(open));
+    $('notePreview').textContent = text.trim().split('\n')[0] || '';
+    $('notePreview').title = draft ? 'Changes are kept while saving continues' : text;
+    $('noteDiscard').disabled = !dirtyHere();
+  }
+
+  function setNoteOpen(open, focus = false) {
+    noteEpoch++;
+    $('notePanel').hidden = !open;
+    document.body.classList.toggle('note-open', open);
+    renderNoteSummary();
+    if (focus) (open ? noteBox : $('noteToggle')).focus();
+  }
+
+  function openNote() {
+    if (S.cur == null) return;
+    if (!isPhone()) togglePanels(false);
+    renderNoteEditor(false);
+    setNoteOpen(true, true);
+  }
+
+  function closeNote() {
+    flushNote();  // Keep the existing autosave/queue contract when collapsing.
+    setNoteOpen(false, true);
+  }
 
   function renderNoteEditor(force) {
-    if (!force && editingHere()) return;
-    const e = entry(S.cur);
-    noteBox.value = e ? e.note || '' : '';
+    if (force || !editingHere()) {
+      const draft = noteDrafts.get(noteKey()), e = entry(S.cur);
+      noteBox.value = draft ? draft.note : e ? e.note || '' : '';
+    }
+    renderNoteSummary();
   }
+
+  function discardUnsavedNote() {
+    if (!dirtyHere()) return;  // Never undo a note already sent to the save queue.
+    clearTimeout(noteTimer);
+    const previous = dirty.before;
+    dirty = null;
+    if (previous && previous.revision > (acknowledgedNotes.get(noteKey()) || 0)) noteDrafts.set(noteKey(), previous);
+    else noteDrafts.delete(noteKey());
+    if (pendingByUnit.get(noteKey()) > 0) setSave('saving');
+    else if (noteDrafts.has(noteKey())) setSave('error', 'Note changes remain in this tab');
+    else saveStates.delete(noteKey());
+    renderNoteEditor(true);
+    renderCurrentSave();
+    setNoteOpen(false, true);
+  }
+
+  async function saveAndCloseNote() {
+    const key = noteKey(), epoch = noteEpoch, draft = noteDrafts.get(key);
+    // A terminal HTTP error keeps the draft; the explicit Save action can retry it.
+    if (!dirtyHere() && draft && !(pendingByUnit.get(key) > 0)) dirty = Object.assign({}, draft);
+    if (!dirtyHere() && !draft && !(pendingByUnit.get(key) > 0)) { setNoteOpen(false, true); return; }
+    const result = flushNote() || chain;
+    await result;
+    if (key === noteKey() && epoch === noteEpoch && !noteDrafts.has(key) && !dirtyHere()) setNoteOpen(false, true);
+  }
+
+  $('noteToggle').addEventListener('click', () => $('notePanel').hidden ? openNote() : closeNote());
+  $('noteSaveClose').addEventListener('click', saveAndCloseNote);
+  let discardPressed = false;
+  $('noteDiscard').addEventListener('pointerdown', () => { discardPressed = true; clearTimeout(noteTimer); });
+  const resumeAutosave = () => {
+    if (!discardPressed) return;
+    discardPressed = false;
+    if (dirtyHere()) noteTimer = setTimeout(flushNote, 700);
+  };
+  document.addEventListener('pointerup', resumeAutosave);
+  document.addEventListener('pointercancel', resumeAutosave);
+  $('noteDiscard').addEventListener('click', discardUnsavedNote);
+  $('backFigure').addEventListener('click', () => $('stage').scrollIntoView({block: 'start', behavior: 'smooth'}));
 
   function renderTagButtons() {
     $('tagBtns').innerHTML = S.config.tags.map((t, i) =>
@@ -637,12 +713,20 @@
     $('flag').querySelector('.star').textContent = flagged ? '★' : '☆';
   }
 
-  function setSave(state, detail) {
+  function renderCurrentSave() {
+    const state = saveStates.get(noteKey());
     const el = $('saveState');
-    el.classList.toggle('err', state === 'error' || state === 'retry');
+    el.textContent = state ? state.text : '';
+    el.classList.toggle('err', !!(state && state.error));
+    renderNoteSummary();
+  }
+
+  function setSave(state, detail, sid = S.sid, unit = S.cur) {
     const time = new Date().toLocaleTimeString([], {hour: '2-digit', minute: '2-digit'});
-    el.textContent = {editing: 'Editing…', saving: 'Saving…', saved: `Saved ${time}`, retry: 'Offline · retrying…', error: `Not saved: ${detail || ''}`}[state] || '';
-    if (state === 'saved' && detail) { el.textContent += ' · ' + detail; el.classList.add('err'); }
+    const text = {editing: 'Editing…', saving: 'Saving…', saved: `Saved ${time}`, retry: 'Offline · retrying…', error: `Not saved: ${detail || ''}`}[state] || '';
+    saveStates.set(noteKey(sid, unit), {text: text + (state === 'saved' && detail ? ' · ' + detail : ''),
+      error: state === 'error' || state === 'retry' || (state === 'saved' && !!detail)});
+    if (sid === S.sid && unit === S.cur) renderCurrentSave();
   }
 
   /** Apply changes to the local copy right away; the server's answer replaces it once nothing is queued. */
@@ -661,27 +745,36 @@
     renderNoted();
     renderTagState();
     renderPos();
+    renderNoteSummary();
   }
 
-  function save(sid, unit, changes, keepalive = false) {
+  function save(sid, unit, changes, keepalive = false, revision = null) {
     pending++;
-    setSave('saving');
+    const key = noteKey(sid, unit);
+    pendingByUnit.set(key, (pendingByUnit.get(key) || 0) + 1);
+    setSave('saving', null, sid, unit);
     const run = async () => {
       for (let attempt = 0; ; attempt++) {
         try {
           const r = await api('/api/note', {method: 'POST', keepalive, body: JSON.stringify(Object.assign({sid, unit}, changes))});
           pending--;
+          pendingByUnit.set(key, pendingByUnit.get(key) - 1);
+          const draft = noteDrafts.get(key);
+          if (revision != null) acknowledgedNotes.set(key, revision);
+          if (draft && draft.revision === revision) noteDrafts.delete(key);
           if (!pending && sid === S.sid) {
             S.notebook = r.notebook;
             S.mtime = r.mtime;
             notebookChanged();
             renderNoteEditor(false);
           }
-          setSave(pending ? 'saving' : 'saved', r.warning);
+          const remaining = noteDrafts.has(key);
+          const state = dirty && dirty.sid === sid && dirty.unit === unit ? 'editing' : pendingByUnit.get(key) ? 'saving' : remaining ? 'error' : 'saved';
+          setSave(state, remaining && state === 'error' ? 'Note changes remain in this tab' : r.warning, sid, unit);
           return r;
         } catch (e) {
-          if (e.status && e.status < 500) { pending--; setSave('error', e.message); toast(`Not saved: ${e.message}`, 5000); return null; }
-          setSave('retry');
+          if (e.status && e.status < 500) { pending--; pendingByUnit.set(key, pendingByUnit.get(key) - 1); setSave('error', e.message, sid, unit); toast(`Not saved: ${e.message}`, 5000); return null; }
+          setSave('retry', null, sid, unit);
           await sleep(Math.min(10000, 600 * 2 ** attempt));
         }
       }
@@ -696,17 +789,23 @@
     const d = dirty;
     dirty = null;
     optimistic(d.sid, d.unit, {note: d.note});
-    save(d.sid, d.unit, {note: d.note}, keepalive);
+    renderNoteSummary();
+    return save(d.sid, d.unit, {note: d.note}, keepalive, d.revision);
   }
 
   noteBox.addEventListener('input', () => {
     if (S.cur == null) return;
-    dirty = {sid: S.sid, unit: S.cur, note: noteBox.value};
+    const before = dirtyHere() ? dirty.before : noteDrafts.get(noteKey()) || null;
+    dirty = {sid: S.sid, unit: S.cur, note: noteBox.value, revision: ++noteRevision, before};
+    noteDrafts.set(noteKey(), Object.assign({}, dirty));
     setSave('editing');
     clearTimeout(noteTimer);
     noteTimer = setTimeout(flushNote, 700);
   });
-  noteBox.addEventListener('blur', () => flushNote());
+  noteBox.addEventListener('blur', e => { if (e.relatedTarget !== $('noteDiscard')) flushNote(); });
+  window.addEventListener('beforeunload', e => {
+    if (dirty || noteDrafts.size) { e.preventDefault(); e.returnValue = ''; }
+  });
 
   function toggleTag(i) {
     const tag = S.config.tags[i];
@@ -789,6 +888,7 @@
   }
 
   function renderEg() {
+    placeEgButton();
     const b = $('egBtn');
     b.hidden = !S.eg.url;
     b.classList.toggle('up', !!S.eg.running);
@@ -826,6 +926,8 @@
   $('panelsBtn').addEventListener('click', () => togglePanels());
 
   const isPhone = () => window.matchMedia('(max-width: 999px)').matches;
+  function placeEgButton() { (isPhone() ? $('egMobile') : $('egDesktop')).appendChild($('egBtn')); }
+  window.addEventListener('resize', placeEgButton);
   function openDrawer() { document.body.classList.add('drawer'); }
   function closeDrawer() { document.body.classList.remove('drawer'); }
   $('drawerBtn').addEventListener('click', openDrawer);
@@ -851,8 +953,9 @@
     else toast(`No unit ${id} in this session`);
   }
 
-  function showHelp() { $('help').hidden = false; }
-  function hideHelp() { $('help').hidden = true; }
+  let helpFocus = null;
+  function showHelp() { helpFocus = document.activeElement; $('help').hidden = false; $('helpClose').focus(); }
+  function hideHelp() { $('help').hidden = true; if (helpFocus && helpFocus.isConnected) helpFocus.focus(); }
   $('helpBtn').addEventListener('click', showHelp);
   $('helpClose').addEventListener('click', hideHelp);
   $('help').addEventListener('click', e => { if (e.target === $('help')) hideHelp(); });
@@ -871,11 +974,15 @@
 
   document.addEventListener('keydown', e => {
     const t = e.target;
-    if (!$('help').hidden && (e.key === 'Escape' || e.key === '?')) { hideHelp(); e.preventDefault(); return; }
+    if (!$('help').hidden) {
+      if (e.key === 'Escape' || e.key === '?') { hideHelp(); e.preventDefault(); }
+      else if (e.key === 'Tab') { e.preventDefault(); $('helpClose').focus(); }
+      return;
+    }
     if (t.closest && t.closest('input, textarea, select')) {
       if (t === noteBox) {
-        if (e.key === 'Escape') { e.preventDefault(); flushNote(); noteBox.blur(); }
-        else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); flushNote(); step(1); }
+        if (e.key === 'Escape') { e.preventDefault(); closeNote(); }
+        else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); flushNote(); step(1); openNote(); }
       } else if (t.id === 'jump') {
         if (e.key === 'Enter') { e.preventDefault(); jumpTo(t.value); }
         else if (e.key === 'Escape') { t.value = ''; t.blur(); closeDrawer(); }
@@ -899,7 +1006,7 @@
       case '{': cycleSession(-1); break;
       case 'r': setView('raster'); break;
       case 'f': toggleFlag(); break;
-      case 'n': case 'Enter': if (!isPhone()) togglePanels(false); noteBox.focus(); break;
+      case 'n': case 'Enter': openNote(); break;
       case 'g': case '/': openJump(); break;
       case 'z': toggleZoom(); break;
       case 'e': openEg(); break;
@@ -908,7 +1015,8 @@
       case 'S': setSort(S.sort.key, -S.sort.dir); break;
       case '?': showHelp(); break;
       case 'Escape':
-        if (S.zoom) toggleZoom(false);
+        if (!$('notePanel').hidden) closeNote();
+        else if (S.zoom) toggleZoom(false);
         else if (document.body.classList.contains('drawer')) closeDrawer();
         else handled = false;
         break;

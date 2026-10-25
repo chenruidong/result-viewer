@@ -20,16 +20,16 @@
 <body>
 <header id="bar">
   <button id="drawerBtn" class="icon phone-only" title="Unit list" aria-label="Unit list">☰</button>
-  <span class="brand desk-only">Unit rasters</span>
+  <span class="brand">Unit rasters</span>
   <select id="session" aria-label="Session"></select>
   <span class="rowbreak"></span>
-  <div class="nav">
+  <nav class="nav" aria-label="Unit navigation">
     <button id="prev" class="icon" title="Previous unit (←)" aria-label="Previous unit">‹</button>
     <span id="pos" title="Position in the filtered list">–</span>
     <button id="next" class="icon" title="Next unit (→)" aria-label="Next unit">›</button>
-  </div>
+  </nav>
   <span class="spacer"></span>
-  <button id="egBtn" class="pill" title="Open this unit in electro_gui (e)" hidden><span class="dot"></span>electro_gui ↗</button>
+  <span id="egDesktop"><button id="egBtn" class="pill" title="Open this unit in electro_gui (e)" hidden><span class="dot"></span>electro_gui ↗</button></span>
   <button id="panelsBtn" class="icon desk-only" title="Hide/show side panels (m)" aria-label="Toggle side panels">◫</button>
   <button id="helpBtn" class="icon" title="Keys and gestures (?)" aria-label="Help">?</button>
 </header>
@@ -49,8 +49,9 @@
   <section id="stage">
     <div id="titleRow">
       <h1 id="title">Loading…</h1>
-      <span id="badges"></span>
+      <span id="unitMeta"></span>
     </div>
+    <div id="badges"></div>
     <nav id="views" aria-label="Figures"></nav>
     <div id="figure">
       <img id="img" alt="" draggable="false">
@@ -65,24 +66,34 @@
     <div id="noteCtl">
       <div class="note-tools">
         <button id="flag" class="flag" aria-pressed="false" title="Flag (f)"><span class="star">☆</span> Flag <kbd>f</kbd></button>
-        <span id="saveState" class="muted small" aria-live="polite"></span>
       </div>
       <div id="tagBtns"></div>
     </div>
     <div id="noteEdit">
-      <textarea id="note" rows="5" placeholder="Note for this unit…  (n to write · Esc when done · ⌘↩ save &amp; next)"></textarea>
-      <div id="conflicts" class="warn small" hidden></div>
+      <div class="note-summary">
+        <button id="noteToggle" aria-expanded="false" aria-controls="notePanel" aria-describedby="notePreview" disabled>Add note</button>
+        <span id="notePreview" class="muted small"></span>
+        <span id="saveState" class="muted small" role="status" aria-live="polite"></span>
+      </div>
+      <div id="notePanel" hidden>
+        <div class="note-label-row"><label for="note">Unit note</label><button id="backFigure" class="phone-only">↑ Figure</button></div>
+        <textarea id="note" rows="5" placeholder="Add an observation…" aria-describedby="title noteBehavior"></textarea>
+        <span id="noteBehavior" class="sr-only">Notes autosave. Close keeps changes and saving continues. Discard unsaved removes only edits that have not entered the save queue.</span>
+        <div class="note-actions"><button id="noteSaveClose">Save &amp; close</button><button id="noteDiscard" disabled title="Discard edits that have not entered the save queue. Already saved or queued changes are kept.">Discard unsaved</button></div>
+      </div>
+      <div id="conflicts" class="warn small" role="alert" hidden></div>
     </div>
     <div id="nb">
       <h2 id="nbTitle">Notebook</h2>
       <ol id="noted"></ol>
+      <span id="egMobile" class="phone-only"></span>
       <details id="filesBox" class="muted small"><summary>Files</summary><div id="files"></div></details>
     </div>
   </aside>
 </div>
 
 <div id="help" class="overlay" hidden>
-  <div class="card" role="dialog" aria-label="Keys and gestures">
+  <div class="card" role="dialog" aria-modal="true" aria-label="Keys and gestures">
     <button class="icon close" id="helpClose" aria-label="Close">✕</button>
     <h2>Keys</h2>
     <table>
@@ -94,12 +105,14 @@
       <tr><td><kbd>}</kbd> <kbd>{</kbd></td><td>next / previous session</td></tr>
       <tr><td><kbd>1</kbd>–<kbd>9</kbd></td><td>toggle tag</td></tr>
       <tr><td><kbd>f</kbd></td><td>flag</td></tr>
-      <tr><td><kbd>n</kbd> · <kbd>Enter</kbd></td><td>write a note (<kbd>Esc</kbd> done, <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>Enter</kbd> save &amp; next)</td></tr>
+      <tr><td><kbd>n</kbd> · <kbd>Enter</kbd></td><td>open Unit note (<kbd>Esc</kbd> closes and keeps changes, <kbd>⌘</kbd>/<kbd>Ctrl</kbd>+<kbd>Enter</kbd> save &amp; next)</td></tr>
       <tr><td><kbd>z</kbd> · click figure</td><td>zoom / fit (drag to pan)</td></tr>
       <tr><td><kbd>e</kbd></td><td>open unit in electro_gui</td></tr>
       <tr><td><kbd>m</kbd></td><td>hide / show side panels</td></tr>
       <tr><td><kbd>?</kbd></td><td>this help</td></tr>
     </table>
+    <h2>Notes</h2>
+    <p>Notes autosave. Add/Edit note opens the editor; Close keeps changes while saving continues. Save &amp; close waits for saving. Discard unsaved cancels only edits that have not entered the save queue. A pending or failed note stays available through Resume draft.</p>
     <h2>Touch</h2>
     <p>Swipe the figure left/right for the next/previous unit · tap it to zoom, tap again to fit · ☰ opens the unit list and filters.</p>
     <p class="muted small" id="helpPaths"></p>

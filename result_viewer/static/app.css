@@ -288,3 +288,82 @@ body.eg-start .card { max-width: 560px; }
 body.eg-start code { word-break: break-all; }
 .wait { display: flex; align-items: center; gap: 10px; margin: 6px 0 10px; }
 .spin { width: 18px; height: 18px; border-radius: 50%; border: 2px solid var(--line); border-top-color: var(--accent); animation: spin .8s linear infinite; }
+
+
+/* Optional notes: preserve the figure and existing controls; open the editor only on request. */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+button:focus-visible, select:focus-visible, input:focus-visible, summary:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+#bar { min-height: 60px; gap: 14px; padding-left: 18px; padding-right: 18px; }
+.brand { font-size: 16px; font-weight: 650; }
+#bar .nav { border: 1px solid var(--line); border-radius: 8px; }
+#egDesktop { display: inline-flex; }
+#titleRow { padding: 18px 22px 0; gap: 10px; align-items: center; }
+#title { font-size: 21px; letter-spacing: -.3px; }
+#unitMeta { display: inline-flex; align-items: center; gap: 9px; font-size: 12px; color: var(--muted); }
+#unitMeta .q { padding: 2px 6px; border-radius: 5px; background: var(--hover); }
+#badges { display: flex; flex-wrap: wrap; align-items: center; gap: 7px; padding: 7px 22px 0; }
+#views { padding: 14px 22px 10px; }
+#figure { padding: 6px 22px 18px; }
+#notes { height: auto; min-height: 0; max-height: 45vh; grid-template-columns: 200px minmax(0,1fr) 240px; padding: 16px 22px; gap: 20px; overflow: auto; }
+#noteEdit { min-width: 0; }
+.note-summary { display: flex; align-items: center; gap: 9px; min-height: 36px; }
+#noteToggle { flex: none; padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px; background: var(--panel); color: var(--accent); font-weight: 600; font-size: 12px; cursor: pointer; }
+#noteToggle:disabled { opacity: .5; cursor: default; }
+#notePreview { min-width: 0; flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#saveState { flex: none; font-size: 11px; max-width: 50%; overflow-wrap: anywhere; }
+#notePanel { display: flex; flex-direction: column; gap: 9px; min-height: 0; }
+.note-label-row { display: flex; align-items: center; justify-content: space-between; margin-top: 9px; }
+.note-label-row label { font-weight: 650; }
+#backFigure { background: transparent; border: 0; color: var(--accent); padding: 5px; cursor: pointer; }
+#note { min-height: 130px; resize: vertical; flex: none; }
+.note-actions { display: flex; gap: 8px; }
+.note-actions button { border: 1px solid var(--line); border-radius: 7px; padding: 7px 11px; background: var(--panel); cursor: pointer; font-size: 12px; }
+#noteSaveClose { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.note-actions button:disabled { opacity: .45; cursor: default; }
+#nb { border-left: 1px solid var(--line); padding-left: 18px; }
+#nbTitle { text-transform: none; letter-spacing: 0; font-size: 13px; color: var(--ink); }
+body.note-open #notePreview { display: none; }
+@media (min-width: 1101px) {
+  body:not(.note-open) #notes { grid-template-columns: minmax(0,1fr) 440px; grid-template-rows: auto auto; gap: 9px 20px; }
+  body:not(.note-open) #noteEdit { grid-column: 1; grid-row: 1; align-self: start; }
+  body:not(.note-open) #noteCtl { grid-column: 1; grid-row: 2; flex-direction: row; align-items: center; }
+  body:not(.note-open) #tagBtns { display: flex; flex-wrap: wrap; }
+  body:not(.note-open) #tagBtns .tag { font-size: 11px; padding: 5px 7px; }
+  body:not(.note-open) #tagBtns kbd { display: none; }
+  body:not(.note-open) #nb { grid-column: 2; grid-row: 1 / span 2; }
+  body:not(.note-open) #noted { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); }
+  body:not(.note-open) #noted li { min-width: 0; }
+  body:not(.note-open) #noted .nh { flex-wrap: wrap; gap: 3px; }
+  body:not(.note-open) #noted .snip { font-size: 10px; }
+}
+@media (max-width: 999px) {
+  #bar { display: grid; grid-template-columns: 40px minmax(0,1fr) 40px; gap: 5px 7px; padding: 8px 12px; }
+  .brand { display: block; grid-column: 1 / 3; grid-row: 1; font-size: 15px; margin: 0; }
+  #drawerBtn { grid-column: 1; grid-row: 2; }
+  #session { grid-column: 2; grid-row: 2; width: 100%; font-size: 14px; height: 40px; }
+  #helpBtn { grid-column: 3; grid-row: 1; }
+  #bar .nav { grid-column: 1 / 4; grid-row: 3; justify-self: center; border-color: transparent; }
+  #bar .rowbreak, #bar .spacer, #egDesktop { display: none; }
+  #pos { min-width: 92px; }
+  #titleRow { padding: 16px 14px 0; }
+  #title { font-size: 20px; }
+  #unitMeta { gap: 7px; font-size: 11px; }
+  #badges { padding: 7px 14px 0; }
+  #views { padding: 14px 14px 9px; }
+  #figure { padding: 4px 10px 14px; }
+  #notes { display: flex; height: auto; max-height: none; overflow: visible; padding: 10px 14px 18px; gap: 12px; }
+  #noteEdit { order: 0; }
+  #noteCtl { order: 1; border-top: 1px solid var(--line); padding-top: 12px; }
+  #nb { order: 2; border-left: 0; border-top: 1px solid var(--line); padding: 12px 0 0; }
+  .note-summary { min-height: 40px; gap: 7px; }
+  #noteToggle { min-height: 40px; padding: 7px 9px; font-size: 13px; }
+  #notePreview { font-size: 12px; }
+  #saveState { font-size: 10px; max-width: 44%; }
+  #note { min-height: 138px; font-size: 16px; }
+  .note-actions button { min-height: 42px; font-size: 13px; }
+  #tagBtns { display: flex; flex-wrap: wrap; gap: 6px; }
+  #noteCtl { display: block; }
+  .note-tools { float: left; margin: 0 8px 0 0; }
+  .tag, .flag { min-height: 40px; font-size: 11px; padding: 7px 10px; }
+  #egMobile { margin-top: 8px; }
+}
