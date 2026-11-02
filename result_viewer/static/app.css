@@ -367,3 +367,6 @@ body.note-open #notePreview { display: none; }
   .tag, .flag { min-height: 40px; font-size: 11px; padding: 7px 10px; }
   #egMobile { margin-top: 8px; }
 }
+
+/* Prevent accidental browser double-tap zoom; keep scrolling and pinch zoom. */
+html, body { touch-action: manipulation; }
